@@ -1,0 +1,9 @@
+apiVersion: managed-postgres-operator.hoppscale.com/v1alpha1
+kind: PostgresDatabase
+metadata:
+  labels:
+    app.kubernetes.io/name: managed-postgres-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: postgresdatabase-sample
+spec:
+  # TODO(user): Add fields here

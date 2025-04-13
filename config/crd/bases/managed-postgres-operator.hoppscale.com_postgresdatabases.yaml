@@ -1,0 +1,83 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: postgresdatabases.managed-postgres-operator.hoppscale.com
+spec:
+  group: managed-postgres-operator.hoppscale.com
+  names:
+    kind: PostgresDatabase
+    listKind: PostgresDatabaseList
+    plural: postgresdatabases
+    singular: postgresdatabase
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PostgresDatabase is the Schema for the postgresdatabases API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PostgresDatabaseSpec defines the desired state of PostgresDatabase.
+            properties:
+              extensions:
+                description: Extensions is the list of database extensions to install
+                  on the database.
+                items:
+                  type: string
+                type: array
+              keepDatabaseOnDelete:
+                description: KeepDatabaseOnDelete will determine if the deletion of
+                  the object should drop the remote PostgreSQL database. Default is
+                  false.
+                type: boolean
+              name:
+                description: Name is the PostgreSQL database's name.
+                type: string
+                x-kubernetes-validations:
+                - message: name is immutable
+                  rule: self == oldSelf
+              owner:
+                description: Owner is the PostgreSQL database's owner. It must be
+                  a valid existing role.
+                type: string
+              preserveConnectionsOnDelete:
+                description: PreserveConnectionsOnDelete will determine if the deletion
+                  of the object should drop the existing connections to the remote
+                  PostgreSQL database. Default is false.
+                type: boolean
+            required:
+            - name
+            type: object
+          status:
+            description: PostgresDatabaseStatus defines the observed state of PostgresDatabase.
+            properties:
+              succeeded:
+                type: boolean
+            required:
+            - succeeded
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
