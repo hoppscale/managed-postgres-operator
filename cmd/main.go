@@ -106,6 +106,8 @@ func main() {
 		},
 	}
 
+	cacheRolePasswords := make(map[string]string)
+
 	// Create watchers for metrics and webhooks certificates
 	var metricsCertWatcher, webhookCertWatcher *certwatcher.CertWatcher
 
@@ -211,6 +213,15 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PostgresDatabase")
 
+		os.Exit(1)
+	}
+	if err = (&controller.PostgresRoleReconciler{
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		PGPools:            pgpools,
+		CacheRolePasswords: cacheRolePasswords,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PostgresRole")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
