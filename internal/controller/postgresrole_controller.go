@@ -32,6 +32,7 @@ import (
 	"github.com/go-logr/logr"
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
+	"github.com/hoppscale/managed-postgres-operator/internal/utils"
 )
 
 const PostgresRoleFinalizer = "postgresrole.managed-postgres-operator.hoppscale.com/finalizer"
@@ -42,7 +43,8 @@ type PostgresRoleReconciler struct {
 	Scheme  *runtime.Scheme
 	logging logr.Logger
 
-	PGPools *postgresql.PGPools
+	PGPools              *postgresql.PGPools
+	OperatorInstanceName string
 
 	CacheRolePasswords map[string]string
 }
@@ -60,6 +62,11 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
 		return ctrlFailResult, client.IgnoreNotFound(err)
+	}
+
+	// Skip reconcile if the resource is not managed by this operator
+	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
+		return ctrlSuccessResult, nil
 	}
 
 	rolePassword := ""

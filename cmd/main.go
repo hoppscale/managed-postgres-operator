@@ -92,6 +92,8 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
+	operatorInstanceName := os.Getenv("OPERATOR_INSTANCE_NAME")
+
 	pgpool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		setupLog.Error(err, "Failed to connect PostgreSQL server: %s", err)
@@ -207,19 +209,21 @@ func main() {
 	}
 
 	if err = (&controller.PostgresDatabaseReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		PGPools: pgpools,
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		PGPools:              pgpools,
+		OperatorInstanceName: operatorInstanceName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PostgresDatabase")
 
 		os.Exit(1)
 	}
 	if err = (&controller.PostgresRoleReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		PGPools:            pgpools,
-		CacheRolePasswords: cacheRolePasswords,
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		PGPools:              pgpools,
+		OperatorInstanceName: operatorInstanceName,
+		CacheRolePasswords:   cacheRolePasswords,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PostgresRole")
 		os.Exit(1)

@@ -15,6 +15,7 @@ import (
 
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
+	"github.com/hoppscale/managed-postgres-operator/internal/utils"
 )
 
 const PostgresDatabaseFinalizer = "postgresdatabase.managed-postgres-operator.hoppscale.com/finalizer"
@@ -25,7 +26,8 @@ type PostgresDatabaseReconciler struct {
 	Scheme  *runtime.Scheme
 	logging logr.Logger
 
-	PGPools *postgresql.PGPools
+	PGPools              *postgresql.PGPools
+	OperatorInstanceName string
 }
 
 // +kubebuilder:rbac:groups=managed-postgres-operator.hoppscale.com,resources=postgresdatabases,verbs=get;list;watch;create;update;patch;delete
@@ -41,6 +43,11 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
 		return ctrlFailResult, client.IgnoreNotFound(err)
+	}
+
+	// Skip reconcile if the resource is not managed by this operator
+	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
+		return ctrlSuccessResult, nil
 	}
 
 	existingDatabase, err := postgresql.GetDatabase(r.PGPools.Default, resource.Spec.Name)
