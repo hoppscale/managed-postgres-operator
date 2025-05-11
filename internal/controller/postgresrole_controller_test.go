@@ -33,6 +33,7 @@ import (
 
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
+	"github.com/hoppscale/managed-postgres-operator/internal/utils"
 )
 
 var _ = Describe("PostgresRole Controller", func() {
@@ -120,6 +121,77 @@ var _ = Describe("PostgresRole Controller", func() {
 			controllerutil.RemoveFinalizer(resource, PostgresRoleFinalizer)
 			Expect(k8sClient.Update(ctx, resource)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		When("the resource is managed by the operator's instance", func() {
+			It("should continue to reconcile the resource and create the role", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.ObjectMeta.Annotations = map[string]string{
+					utils.OperatorInstanceAnnotationName: "foo",
+				}
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+				controllerReconciler := &PostgresRoleReconciler{
+					Client:               k8sClient,
+					Scheme:               k8sClient.Scheme(),
+					PGPools:              pgpools,
+					OperatorInstanceName: "foo",
+					CacheRolePasswords:   make(map[string]string),
+				}
+
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"rolname",
+							"rolsuper",
+							"rolinherit",
+							"rolcreaterole",
+							"rolcreatedb",
+							"rolcanlogin",
+							"rolreplication",
+							"rolbypassrls",
+						}),
+					)
+				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS`))).
+					WillReturnResult(pgxmock.NewResult("foo", 1))
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+			})
+		})
+
+		When("the resource is not managed by the operator's instance", func() {
+			It("should skip reconciliation", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.ObjectMeta.Annotations = map[string]string{
+					utils.OperatorInstanceAnnotationName: "bar",
+				}
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+				controllerReconciler := &PostgresRoleReconciler{
+					Client:               k8sClient,
+					Scheme:               k8sClient.Scheme(),
+					PGPools:              pgpools,
+					OperatorInstanceName: "foo",
+					CacheRolePasswords:   make(map[string]string),
+				}
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+			})
 		})
 
 		When("the resource is created without password and no role exists", func() {

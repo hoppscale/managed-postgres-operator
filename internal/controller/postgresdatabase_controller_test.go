@@ -17,6 +17,7 @@ import (
 
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
+	"github.com/hoppscale/managed-postgres-operator/internal/utils"
 )
 
 var _ = Describe("PostgresDatabase Controller", func() {
@@ -85,6 +86,86 @@ var _ = Describe("PostgresDatabase Controller", func() {
 			for _, pool := range pgpoolsMock {
 				pool.Close()
 			}
+		})
+
+		When("the resource is managed by the operator's instance", func() {
+			It("should continue to reconcile the resource and create the database", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.ObjectMeta.Annotations = map[string]string{
+					utils.OperatorInstanceAnnotationName: "foo",
+				}
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+				controllerReconciler := &PostgresDatabaseReconciler{
+					Client:               k8sClient,
+					Scheme:               k8sClient.Scheme(),
+					PGPools:              pgpools,
+					OperatorInstanceName: "foo",
+				}
+
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetDatabaseSQLStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"datname",
+							"owner",
+						}),
+					)
+				pgpoolsMock["default"].ExpectExec(`CREATE DATABASE "foo"`).
+					WillReturnResult(pgxmock.NewResult("", 1))
+				pgpoolsMock["default"].ExpectExec(`ALTER DATABASE "foo" OWNER TO "foo_owner"`).
+					WillReturnResult(pgxmock.NewResult("", 1))
+				pgpoolsMock["foo"].ExpectQuery(`SELECT extname FROM pg_extension`).
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"extname",
+						}).
+							AddRow(
+								"plpgsql",
+							),
+					)
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				for _, poolMock := range pgpoolsMock {
+					if err := poolMock.ExpectationsWereMet(); err != nil {
+						Fail(err.Error())
+					}
+				}
+			})
+		})
+
+		When("the resource is not managed by the operator's instance", func() {
+			It("should skip reconciliation", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.ObjectMeta.Annotations = map[string]string{
+					utils.OperatorInstanceAnnotationName: "bar",
+				}
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+				controllerReconciler := &PostgresDatabaseReconciler{
+					Client:               k8sClient,
+					Scheme:               k8sClient.Scheme(),
+					PGPools:              pgpools,
+					OperatorInstanceName: "foo",
+				}
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				for _, poolMock := range pgpoolsMock {
+					if err := poolMock.ExpectationsWereMet(); err != nil {
+						Fail(err.Error())
+					}
+				}
+			})
 		})
 
 		When("the resource is created and no database exists", func() {
