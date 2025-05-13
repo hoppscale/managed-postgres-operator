@@ -37,4 +37,6 @@ spec:
   replication: false # Is the role used for replication?
   bypassRLS: false # Should the role bypass the defined row-level security (RLS) policies?
   passwordSecretName: "my-secret" # Name of the secret from where the role's password should be retrieved under the key `password`
+  memberOfRoles: # List of roles the role should be member of
+    - anotherRole
 ```

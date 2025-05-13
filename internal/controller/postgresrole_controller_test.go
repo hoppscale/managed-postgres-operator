@@ -155,6 +155,14 @@ var _ = Describe("PostgresRole Controller", func() {
 					)
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS`))).
 					WillReturnResult(pgxmock.NewResult("foo", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"group_role",
+						}),
+					)
+
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 					NamespacedName: typeNamespacedName,
 				})
@@ -219,6 +227,14 @@ var _ = Describe("PostgresRole Controller", func() {
 					)
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS`))).
 					WillReturnResult(pgxmock.NewResult("foo", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"group_role",
+						}),
+					)
+
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 					NamespacedName: typeNamespacedName,
 				})
@@ -263,6 +279,13 @@ var _ = Describe("PostgresRole Controller", func() {
 								false,
 							),
 					)
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"group_role",
+						}),
+					)
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 					NamespacedName: typeNamespacedName,
@@ -305,6 +328,13 @@ var _ = Describe("PostgresRole Controller", func() {
 					)
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'password'`))).
 					WillReturnResult(pgxmock.NewResult("foo", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"group_role",
+						}),
+					)
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 					NamespacedName: typeNamespacedName,

@@ -144,6 +144,11 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrlFailResult, err
 	}
 
+	err = r.reconcileRoleMembership(desiredRole.Name, resource.Spec.MemberOfRoles)
+	if err != nil {
+		return ctrlFailResult, err
+	}
+
 	if !resource.Status.Succeeded {
 		resource.Status.Succeeded = true
 		if err = r.Client.Status().Update(context.Background(), resource); err != nil {
@@ -221,6 +226,57 @@ func (r *PostgresRoleReconciler) reconcileOnCreation(existingRole, desiredRole *
 		r.logging.Info("Role has been updated")
 
 		r.CacheRolePasswords[desiredRole.Name] = desiredRole.Password
+	}
+
+	return err
+}
+
+func (r *PostgresRoleReconciler) reconcileRoleMembership(role string, desiredMembership []string) (err error) {
+	// Listing current membership
+	existingRoleMembership, err := postgresql.GetRoleMembership(r.PGPools.Default, role)
+	if err != nil {
+		r.logging.Error(err, "failed to retrieve role's membership")
+		return err
+	}
+
+	// Revoking membership
+	for _, existingGroupRole := range existingRoleMembership {
+		found := false
+		for _, desiredGroupRole := range desiredMembership {
+			if desiredGroupRole == existingGroupRole {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err = postgresql.RevokeRoleMembership(r.PGPools.Default, existingGroupRole, role)
+			if err != nil {
+				r.logging.Error(err, "failed to revoke role membership")
+				return err
+			}
+			r.logging.Info(fmt.Sprintf("Role \"%s\" has been revoked from the group \"%s\"", role, existingGroupRole))
+		}
+	}
+
+	// Granting membership
+	for _, desiredGroupRole := range desiredMembership {
+		found := false
+		for _, existingGroupRole := range existingRoleMembership {
+			if desiredGroupRole == existingGroupRole {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err = postgresql.GrantRoleMembership(r.PGPools.Default, desiredGroupRole, role)
+			if err != nil {
+				r.logging.Error(err, "failed to grant role membership")
+				return err
+			}
+			r.logging.Info(fmt.Sprintf("Role \"%s\" has been granted to the group \"%s\"", role, desiredGroupRole))
+		}
 	}
 
 	return err

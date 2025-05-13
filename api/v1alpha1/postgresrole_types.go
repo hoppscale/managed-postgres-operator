@@ -36,6 +36,8 @@ type PostgresRoleSpec struct {
 	BypassRLS   bool `json:"bypassRLS,omitempty"`
 
 	PasswordSecretName string `json:"passwordSecretName,omitempty"`
+
+	MemberOfRoles []string `json:"memberOfRoles,omitempty"`
 }
 
 // PostgresRoleStatus defines the observed state of PostgresRole.
