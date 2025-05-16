@@ -49,6 +49,10 @@ spec:
                 type: boolean
               login:
                 type: boolean
+              memberOfRoles:
+                items:
+                  type: string
+                type: array
               name:
                 description: PostgreSQL role name
                 type: string
