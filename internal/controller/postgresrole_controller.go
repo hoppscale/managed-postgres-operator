@@ -19,9 +19,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -80,10 +83,19 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		resourceSecret := &corev1.Secret{}
 
 		if err := r.Client.Get(ctx, secretNamespacedName, resourceSecret); err != nil {
-			return ctrlFailResult, client.IgnoreNotFound(err)
+			// If the secret doesn't exist, it creates it and generates a password
+			if errors.IsNotFound(err) {
+				rolePassword, err = r.generatePasswordSecret(&secretNamespacedName)
+				if err != nil {
+					return ctrlFailResult, err
+				}
+				r.logging.Info(fmt.Sprintf("Password has been generated and secret created for role \"%s\"", resource.Spec.Name))
+			} else {
+				return ctrlFailResult, client.IgnoreNotFound(err)
+			}
+		} else {
+			rolePassword = string(resourceSecret.Data["password"])
 		}
-
-		rolePassword = string(resourceSecret.Data["password"])
 	}
 
 	desiredRole := postgresql.Role{
@@ -123,6 +135,26 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		err = r.reconcileOnDeletion(existingRole)
 		if err != nil {
 			return ctrlFailResult, err
+		}
+
+		// Remove associated secret if created by operator
+		if resource.Spec.PasswordSecretName != "" {
+			secretNamespacedName := types.NamespacedName{
+				Namespace: resource.ObjectMeta.Namespace,
+				Name:      resource.Spec.PasswordSecretName,
+			}
+
+			resourceSecret := &corev1.Secret{}
+			if err := r.Client.Get(ctx, secretNamespacedName, resourceSecret); err != nil {
+				return ctrlFailResult, client.IgnoreNotFound(err)
+			}
+
+			if val, ok := resourceSecret.Labels["app.kubernetes.io/managed-by"]; ok && val == "managed-postgres-operator.hoppscale.com" {
+				err = r.Client.Delete(ctx, resourceSecret)
+				if err != nil {
+					return ctrlFailResult, client.IgnoreNotFound(err)
+				}
+			}
 		}
 
 		// Remove our finalizer from the list and update it.
@@ -280,4 +312,34 @@ func (r *PostgresRoleReconciler) reconcileRoleMembership(role string, desiredMem
 	}
 
 	return err
+}
+
+func (r *PostgresRoleReconciler) generatePasswordSecret(secretName *types.NamespacedName) (password string, err error) {
+	// Generate password
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	random := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+
+	result := make([]byte, 30)
+	for i := range result {
+		result[i] = charset[random.IntN(len(charset))]
+	}
+
+	// Create K8S secret
+	resourceSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: secretName.Namespace,
+			Name:      secretName.Name,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "managed-postgres-operator.hoppscale.com",
+			},
+		},
+		Type: "Opaque",
+		Data: map[string][]byte{
+			"password": result,
+		},
+	}
+
+	err = r.Client.Create(context.Background(), resourceSecret)
+	password = string(result)
+	return
 }
