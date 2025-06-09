@@ -347,6 +347,62 @@ var _ = Describe("PostgresRole Controller", func() {
 			})
 		})
 
+		When("the resource is created without a password but a secret and no role exists", func() {
+			It("should reconcile the resource, create a secret, generate a password and create the role", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.Spec.PasswordSecretName = "db-config"
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+				controllerReconciler := &PostgresRoleReconciler{
+					Client:             k8sClient,
+					Scheme:             k8sClient.Scheme(),
+					PGPools:            pgpools,
+					CacheRolePasswords: make(map[string]string),
+				}
+
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"rolname",
+							"rolsuper",
+							"rolinherit",
+							"rolcreaterole",
+							"rolcreatedb",
+							"rolcanlogin",
+							"rolreplication",
+							"rolbypassrls",
+						}),
+					)
+				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s[a-zA-Z0-9]{30}'$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD '`))).
+					WillReturnResult(pgxmock.NewResult("foo", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"group_role",
+						}),
+					)
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+				secretPassword := &corev1.Secret{}
+				secretPasswordName := types.NamespacedName{
+					Namespace: "default",
+					Name:      "db-config",
+				}
+				Expect(k8sClient.Get(ctx, secretPasswordName, secretPassword)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, secretPassword)).To(Succeed())
+			})
+		})
+
 		When("the resource is deleted", func() {
 			It("should successfully reconcile the resource on deletion", func() {
 				By("Reconciling the deleted resource")
@@ -399,6 +455,82 @@ var _ = Describe("PostgresRole Controller", func() {
 				if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
 					Fail(err.Error())
 				}
+			})
+		})
+
+		When("the resource is deleted and an associated secret exists", func() {
+			It("should successfully reconcile the resource on deletion and delete the associated secret", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				controllerutil.AddFinalizer(resource, PostgresRoleFinalizer)
+				resource.Spec.PasswordSecretName = "db-config"
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+				resourceSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "default",
+						Name:      "db-config",
+						Labels: map[string]string{
+							"app.kubernetes.io/managed-by": "managed-postgres-operator.hoppscale.com",
+						},
+					},
+					Type: "Opaque",
+					Data: map[string][]byte{
+						"password": []byte("password"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, resourceSecret)).To(Succeed())
+
+				controllerReconciler := &PostgresRoleReconciler{
+					Client:             k8sClient,
+					Scheme:             k8sClient.Scheme(),
+					PGPools:            pgpools,
+					CacheRolePasswords: make(map[string]string),
+				}
+
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"rolname",
+							"rolsuper",
+							"rolinherit",
+							"rolcreaterole",
+							"rolcreatedb",
+							"rolcanlogin",
+							"rolreplication",
+							"rolbypassrls",
+						}).
+							AddRow(
+								"foo",
+								false,
+								false,
+								true,
+								true,
+								false,
+								false,
+								false,
+							),
+					)
+				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP ROLE "foo"`))).
+					WillReturnResult(pgxmock.NewResult("", 1))
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+				secretNamespacedName := types.NamespacedName{
+					Namespace: "default",
+					Name:      "db-config",
+				}
+				err = k8sClient.Get(ctx, secretNamespacedName, &corev1.Secret{})
+				Expect(err).To(HaveOccurred())
+				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
 		})
 
