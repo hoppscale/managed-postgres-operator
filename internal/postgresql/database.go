@@ -116,3 +116,59 @@ func DropDatabaseConnections(pgpool PGPoolInterface, name string) (err error) {
 	}
 	return
 }
+
+func ListDatabaseAvailablePrivileges() []string {
+	return []string{
+		"CREATE",
+		"CONNECT",
+		"TEMPORARY",
+	}
+}
+
+func GetDatabaseRolePrivileges(pgpool PGPoolInterface, database, role string) (existingPrivileges []string, err error) {
+	existingPrivileges = []string{}
+	var hasPrivilege bool
+	for _, privilege := range ListDatabaseAvailablePrivileges() {
+		rows, err := pgpool.Query(context.Background(), "SELECT has_database_privilege($1, $2, $3)", role, database, privilege)
+		if err != nil {
+			err = fmt.Errorf("pg query failed: %s", err)
+			return []string{}, err
+		}
+		defer rows.Close()
+
+		hasPrivilege, err = pgx.CollectOneRow(rows, pgx.RowTo[bool])
+		if err != nil {
+			err = fmt.Errorf("failed to collect rows: %s", err)
+			return []string{}, err
+		}
+
+		if hasPrivilege {
+			existingPrivileges = append(existingPrivileges, privilege)
+		}
+	}
+	return
+}
+
+func GrantDatabaseRolePrivilege(pgpool PGPoolInterface, database, role, privilege string) (err error) {
+	sanitizedDatabase := pgx.Identifier{database}.Sanitize()
+	sanitizedRole := pgx.Identifier{role}.Sanitize()
+
+	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("GRANT %s ON DATABASE %s TO %s", privilege, sanitizedDatabase, sanitizedRole))
+	if err != nil {
+		return fmt.Errorf("failed to grant privilege \"%s\" on database %s to role %s: %s", privilege, sanitizedDatabase, sanitizedRole, err)
+	}
+
+	return
+}
+
+func RevokeDatabaseRolePrivilege(pgpool PGPoolInterface, database, role, privilege string) (err error) {
+	sanitizedDatabase := pgx.Identifier{database}.Sanitize()
+	sanitizedRole := pgx.Identifier{role}.Sanitize()
+
+	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("REVOKE %s ON DATABASE %s FROM %s", privilege, sanitizedDatabase, sanitizedRole))
+	if err != nil {
+		return fmt.Errorf("failed to revoke privilege \"%s\" on database %s from role %s: %s", privilege, sanitizedDatabase, sanitizedRole, err)
+	}
+
+	return
+}

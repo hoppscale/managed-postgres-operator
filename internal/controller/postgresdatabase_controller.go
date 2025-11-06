@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -105,6 +106,17 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	err = r.reconcileExtensions(&desiredDatabase)
 	if err != nil {
 		return ctrlFailResult, err
+	}
+
+	for roleName, rolePrivileges := range resource.Spec.PrivilegesByRole {
+		err = r.reconcilePrivileges(
+			desiredDatabase.Name,
+			roleName,
+			r.convertPrivilegesSpecToList(rolePrivileges),
+		)
+		if err != nil {
+			return ctrlFailResult, err
+		}
 	}
 
 	if !resource.Status.Succeeded {
@@ -242,4 +254,55 @@ func (r *PostgresDatabaseReconciler) reconcileExtensions(database *postgresql.Da
 		}
 	}
 	return err
+}
+
+// reconcilePrivileges performs all actions related to the database privileges for a single role
+func (r *PostgresDatabaseReconciler) reconcilePrivileges(databaseName, roleName string, desiredPrivileges []string) (err error) {
+	// We retrieve the existing privileges
+	existingPrivileges, err := postgresql.GetDatabaseRolePrivileges(r.PGPools.Default, databaseName, roleName)
+	if err != nil {
+		r.logging.Error(err, "failed to retrieve privileges of database \"%s\" on role \"%s\": %s", databaseName, roleName, err)
+		return err
+	}
+
+	// We grant the missing privileges
+	for _, desiredPrivilege := range desiredPrivileges {
+		if !slices.Contains(existingPrivileges, desiredPrivilege) {
+			err := postgresql.GrantDatabaseRolePrivilege(r.PGPools.Default, databaseName, roleName, desiredPrivilege)
+			if err != nil {
+				r.logging.Error(err, "failed to grant \"%s\" privilege on database \"%s\" to role \"%s\"", desiredPrivilege, databaseName, roleName)
+				return err
+			}
+
+			r.logging.Info(fmt.Sprintf("Privilege \"%s\" has been granted to \"%s\" on database \"%s\"", desiredPrivilege, roleName, databaseName))
+		}
+	}
+
+	// We revoke the non-declared privileges
+	for _, existingPrivilege := range existingPrivileges {
+		if !slices.Contains(desiredPrivileges, existingPrivilege) {
+			err := postgresql.RevokeDatabaseRolePrivilege(r.PGPools.Default, databaseName, roleName, existingPrivilege)
+			if err != nil {
+				r.logging.Error(err, "failed to revoke \"%s\" privilege on database \"%s\" to role \"%s\"", existingPrivilege, databaseName, roleName)
+				return err
+			}
+
+			r.logging.Info(fmt.Sprintf("Privilege \"%s\" has been revoked from \"%s\" on database \"%s\"", existingPrivilege, roleName, databaseName))
+		}
+	}
+	return err
+}
+
+func (r *PostgresDatabaseReconciler) convertPrivilegesSpecToList(privilegesSpec managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabasePrivilegesSpec) []string {
+	privileges := []string{}
+	if privilegesSpec.Create {
+		privileges = append(privileges, "CREATE")
+	}
+	if privilegesSpec.Connect {
+		privileges = append(privileges, "CONNECT")
+	}
+	if privilegesSpec.Temporary {
+		privileges = append(privileges, "TEMPORARY")
+	}
+	return privileges
 }

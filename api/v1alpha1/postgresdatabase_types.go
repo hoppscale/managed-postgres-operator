@@ -20,6 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PostgresDatabasePrivilegesSpec defines the desired database privileges to grant to roles
+type PostgresDatabasePrivilegesSpec struct {
+	Create    bool `json:"create,omitempty"`
+	Connect   bool `json:"connect,omitempty"`
+	Temporary bool `json:"temporary,omitempty"`
+}
+
 // PostgresDatabaseSpec defines the desired state of PostgresDatabase.
 type PostgresDatabaseSpec struct {
 
@@ -39,6 +46,9 @@ type PostgresDatabaseSpec struct {
 
 	// PreserveConnectionsOnDelete will determine if the deletion of the object should drop the existing connections to the remote PostgreSQL database. Default is false.
 	PreserveConnectionsOnDelete bool `json:"preserveConnectionsOnDelete,omitempty"`
+
+	// PrivilegesByRole will grant privileges to roles
+	PrivilegesByRole map[string]PostgresDatabasePrivilegesSpec `json:"privilegesByRole,omitempty"`
 }
 
 // PostgresDatabaseStatus defines the observed state of PostgresDatabase.
