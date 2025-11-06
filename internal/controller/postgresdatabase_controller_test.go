@@ -627,6 +627,85 @@ var _ = Describe("PostgresDatabase Controller", func() {
 					}
 				}
 			})
+		})
+
+		When("reconciling privileges", func() {
+			It("should grant privileges to role 'myrole'", func() {
+				controllerReconciler := &PostgresDatabaseReconciler{
+					Client:  k8sClient,
+					Scheme:  k8sClient.Scheme(),
+					PGPools: pgpools,
+				}
+
+				// Loop over all privileges
+				for _, privilege := range postgresql.ListDatabaseAvailablePrivileges() {
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT has_database_privilege($1, $2, $3)`))).
+						WithArgs("myrole", "mydb", privilege).
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"changeme",
+							}).
+								AddRow(
+									false,
+								),
+						)
+				}
+				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`GRANT CREATE ON DATABASE "mydb" TO "myrole"`))).
+					WillReturnResult(pgxmock.NewResult("", 1))
+
+				err := controllerReconciler.reconcilePrivileges(
+					"mydb",
+					"myrole",
+					[]string{
+						"CREATE",
+					},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				for _, poolMock := range pgpoolsMock {
+					if err := poolMock.ExpectationsWereMet(); err != nil {
+						Fail(err.Error())
+					}
+				}
+			})
+
+			It("should revoke privileges to role 'myrole'", func() {
+				controllerReconciler := &PostgresDatabaseReconciler{
+					Client:  k8sClient,
+					Scheme:  k8sClient.Scheme(),
+					PGPools: pgpools,
+				}
+
+				// Loop over all privileges
+				for _, privilege := range postgresql.ListDatabaseAvailablePrivileges() {
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT has_database_privilege($1, $2, $3)`))).
+						WithArgs("myrole", "mydb", privilege).
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"changeme",
+							}).
+								AddRow(
+									true,
+								),
+						)
+				}
+				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`REVOKE CREATE ON DATABASE "mydb" FROM "myrole"`))).
+					WillReturnResult(pgxmock.NewResult("", 1))
+
+				err := controllerReconciler.reconcilePrivileges(
+					"mydb",
+					"myrole",
+					[]string{
+						"CONNECT",
+						"TEMPORARY",
+					},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				for _, poolMock := range pgpoolsMock {
+					if err := poolMock.ExpectationsWereMet(); err != nil {
+						Fail(err.Error())
+					}
+				}
+			})
 
 		})
 	})

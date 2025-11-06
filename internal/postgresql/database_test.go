@@ -373,4 +373,104 @@ var _ = Describe("PostgreSQL Database", func() {
 		})
 	})
 
+	Context("Calling GetDatabaseRolePrivileges", func() {
+		It("should returns the list of privileges for a role", func() {
+			// Loop over all privileges
+			existingPrivileges := map[string]bool{
+				"CREATE":    false,
+				"CONNECT":   true,
+				"TEMPORARY": true,
+			}
+			for privName, privEnabled := range existingPrivileges {
+				pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT has_database_privilege($1, $2, $3)`))).
+					WithArgs("myrole", "mydb", privName).
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"changeme",
+						}).
+							AddRow(
+								privEnabled,
+							),
+					)
+			}
+
+			privs, err := GetDatabaseRolePrivileges(pgpool, "mydb", "myrole")
+
+			Expect(privs).To(Equal([]string{"CONNECT", "TEMPORARY"}))
+
+			Expect(err).NotTo(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+		It("should return an error if the PostgreSQL request failed", func() {
+			pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT has_database_privilege($1, $2, $3)`))).
+				WithArgs("myrole", "mydb", "CREATE").
+				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
+
+			privs, err := GetDatabaseRolePrivileges(pgpool, "mydb", "myrole")
+
+			Expect(privs).To(Equal([]string{}))
+
+			Expect(err).To(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+	})
+
+	Context("Calling GrantDatabaseRolePrivilege", func() {
+		It("should grant a privilege", func() {
+			pgpoolMock.ExpectExec(regexp.QuoteMeta(`GRANT CREATE ON DATABASE "mydb" TO "myrole"`)).
+				WillReturnResult(pgxmock.NewResult("foo", 1))
+
+			err := GrantDatabaseRolePrivilege(pgpool, "mydb", "myrole", "CREATE")
+
+			Expect(err).NotTo(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+		It("should return an error if the PostgreSQL request failed", func() {
+			pgpoolMock.ExpectExec(regexp.QuoteMeta(`GRANT CREATE ON DATABASE "mydb" TO "myrole"`)).
+				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
+
+			err := GrantDatabaseRolePrivilege(pgpool, "mydb", "myrole", "CREATE")
+
+			Expect(err).To(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+	})
+
+	Context("Calling RevokeDatabaseRolePrivilege", func() {
+		It("should revoke a privilege", func() {
+			pgpoolMock.ExpectExec(regexp.QuoteMeta(`REVOKE CREATE ON DATABASE "mydb" FROM "myrole"`)).
+				WillReturnResult(pgxmock.NewResult("foo", 1))
+
+			err := RevokeDatabaseRolePrivilege(pgpool, "mydb", "myrole", "CREATE")
+
+			Expect(err).NotTo(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+		It("should return an error if the PostgreSQL request failed", func() {
+			pgpoolMock.ExpectExec(regexp.QuoteMeta(`REVOKE CREATE ON DATABASE "mydb" FROM "myrole"`)).
+				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
+
+			err := RevokeDatabaseRolePrivilege(pgpool, "mydb", "myrole", "CREATE")
+
+			Expect(err).To(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+	})
+
 })

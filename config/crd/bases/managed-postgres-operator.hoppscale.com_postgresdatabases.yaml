@@ -65,6 +65,20 @@ spec:
                   of the object should drop the existing connections to the remote
                   PostgreSQL database. Default is false.
                 type: boolean
+              privilegesByRole:
+                additionalProperties:
+                  description: PostgresDatabasePrivilegesSpec defines the desired
+                    state of PostgresDatabase.
+                  properties:
+                    connect:
+                      type: boolean
+                    create:
+                      type: boolean
+                    temporary:
+                      type: boolean
+                  type: object
+                description: PrivilegesByRole will grant privileges to roles
+                type: object
             required:
             - name
             type: object
