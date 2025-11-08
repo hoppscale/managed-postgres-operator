@@ -381,27 +381,28 @@ var _ = Describe("PostgreSQL Database", func() {
 				"CONNECT":   true,
 				"TEMPORARY": true,
 			}
-			for privName, privEnabled := range existingPrivileges {
+			for _, privilege := range ListDatabaseAvailablePrivileges() {
 				pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT has_database_privilege($1, $2, $3)`))).
-					WithArgs("myrole", "mydb", privName).
+					WithArgs("myrole", "mydb", privilege).
 					WillReturnRows(
 						pgxmock.NewRows([]string{
-							"changeme",
+							"has_database_privilege",
 						}).
 							AddRow(
-								privEnabled,
+								existingPrivileges[privilege],
 							),
 					)
 			}
 
 			privs, err := GetDatabaseRolePrivileges(pgpool, "mydb", "myrole")
 
-			Expect(privs).To(Equal([]string{"CONNECT", "TEMPORARY"}))
-
 			Expect(err).NotTo(HaveOccurred())
 			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
 				Fail(err.Error())
 			}
+
+			Expect(privs).To(Equal([]string{"CONNECT", "TEMPORARY"}))
+
 		})
 
 		It("should return an error if the PostgreSQL request failed", func() {
