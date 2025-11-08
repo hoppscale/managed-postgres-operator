@@ -24,4 +24,12 @@ resources:
   kind: PostgresRole
   path: github.com/hoppscale/managed-postgres-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: managed-postgres-operator.hoppscale.com
+  kind: PostgresSchema
+  path: github.com/hoppscale/managed-postgres-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

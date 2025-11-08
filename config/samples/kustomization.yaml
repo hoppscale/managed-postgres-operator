@@ -3,4 +3,5 @@ resources:
 - v1alpha1_postgresdatabase.yaml
 - v1alpha1_postgresfunction.yaml
 - v1alpha1_postgresrole.yaml
+- v1alpha1_postgresschema.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

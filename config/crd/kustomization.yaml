@@ -4,6 +4,7 @@
 resources:
 - bases/managed-postgres-operator.hoppscale.com_postgresdatabases.yaml
 - bases/managed-postgres-operator.hoppscale.com_postgresroles.yaml
+- bases/managed-postgres-operator.hoppscale.com_postgresschemas.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
