@@ -228,6 +228,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PostgresRole")
 		os.Exit(1)
 	}
+	if err = (&controller.PostgresSchemaReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		PGPools:              pgpools,
+		OperatorInstanceName: operatorInstanceName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PostgresSchema")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

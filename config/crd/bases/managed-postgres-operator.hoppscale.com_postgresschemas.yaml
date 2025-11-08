@@ -1,0 +1,89 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: postgresschemas.managed-postgres-operator.hoppscale.com
+spec:
+  group: managed-postgres-operator.hoppscale.com
+  names:
+    kind: PostgresSchema
+    listKind: PostgresSchemaList
+    plural: postgresschemas
+    singular: postgresschema
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PostgresSchema is the Schema for the postgresschemas API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PostgresSchemaSpec defines the desired state of a PostgreSQL
+              schema
+            properties:
+              database:
+                description: Database is the PostgreSQL database's name in which the
+                  schema exists
+                type: string
+                x-kubernetes-validations:
+                - message: database is immutable
+                  rule: self == oldSelf
+              name:
+                description: Name is the PostgreSQL schema's name
+                type: string
+                x-kubernetes-validations:
+                - message: name is immutable
+                  rule: self == oldSelf
+              owner:
+                description: Owner is the PostgreSQL schema's owner. It must be a
+                  valid existing role.
+                type: string
+              privilegesByRole:
+                additionalProperties:
+                  description: PostgresSchemaPrivilegesSpec defines the desired schema
+                    privileges to grant to roles
+                  properties:
+                    create:
+                      type: boolean
+                    usage:
+                      type: boolean
+                  type: object
+                description: PrivilegesByRole will grant privileges to roles on this
+                  schema
+                type: object
+            required:
+            - database
+            - name
+            type: object
+          status:
+            description: PostgresSchemaStatus defines the observed state of PostgresSchema.
+            properties:
+              succeeded:
+                type: boolean
+            required:
+            - succeeded
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

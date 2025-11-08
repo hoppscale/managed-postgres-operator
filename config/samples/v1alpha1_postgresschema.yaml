@@ -1,0 +1,9 @@
+apiVersion: managed-postgres-operator.hoppscale.com/v1alpha1
+kind: PostgresSchema
+metadata:
+  labels:
+    app.kubernetes.io/name: managed-postgres-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: postgresschema-sample
+spec:
+  # TODO(user): Add fields here
