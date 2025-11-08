@@ -239,8 +239,14 @@ var _ = Describe("PostgresDatabase Controller", func() {
 							),
 					)
 
-				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
-					WillReturnResult(pgxmock.NewResult("", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"pg_terminate_backend",
+						}).
+							AddRow(""),
+					)
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP DATABASE "foo"`))).
 					WillReturnResult(pgxmock.NewResult("", 1))
 
@@ -435,8 +441,15 @@ var _ = Describe("PostgresDatabase Controller", func() {
 					PGPools: pgpools,
 				}
 
-				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
-					WillReturnResult(pgxmock.NewResult("", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"pg_terminate_backend",
+						}).
+							AddRow(""),
+					)
+
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP DATABASE "foo"`))).
 					WillReturnResult(pgxmock.NewResult("", 1))
 
@@ -461,8 +474,15 @@ var _ = Describe("PostgresDatabase Controller", func() {
 					PGPools: pgpools,
 				}
 
-				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
-					WillReturnResult(pgxmock.NewResult("", 1))
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+					WithArgs("foo").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"pg_terminate_backend",
+						}).
+							AddRow(""),
+					)
+
 				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP DATABASE "foo"`))).
 					WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
@@ -487,7 +507,8 @@ var _ = Describe("PostgresDatabase Controller", func() {
 					PGPools: pgpools,
 				}
 
-				pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
+				pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+					WithArgs("foo").
 					WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
 				err := controllerReconciler.reconcileOnDeletion(resource, existingDatabase)

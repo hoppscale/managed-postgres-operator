@@ -349,8 +349,14 @@ var _ = Describe("PostgreSQL Database", func() {
 
 	Context("Calling DropDatabaseConnections", func() {
 		It("should drop connections to the database and return no error", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
-				WillReturnResult(pgxmock.NewResult("foo", 1))
+			pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+				WithArgs("foo").
+				WillReturnRows(
+					pgxmock.NewRows([]string{
+						"pg_terminate_backend",
+					}).
+						AddRow(""),
+				)
 
 			err := DropDatabaseConnections(pgpool, "foo")
 
@@ -361,7 +367,8 @@ var _ = Describe("PostgreSQL Database", func() {
 		})
 
 		It("should return an error if the PostgreSQL request failed", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = "foo"`))).
+			pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`))).
+				WithArgs("foo").
 				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
 			err := DropDatabaseConnections(pgpool, "foo")

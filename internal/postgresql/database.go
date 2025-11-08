@@ -109,8 +109,7 @@ func DropExtension(pgpool PGPoolInterface, name string) (err error) {
 }
 
 func DropDatabaseConnections(pgpool PGPoolInterface, name string) (err error) {
-	sanitizedName := pgx.Identifier{name}.Sanitize()
-	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s", sanitizedName))
+	_, err = pgpool.Query(context.Background(), "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", name)
 	if err != nil {
 		return fmt.Errorf("failed to drop database connections: %s", err)
 	}
