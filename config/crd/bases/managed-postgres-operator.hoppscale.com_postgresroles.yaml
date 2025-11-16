@@ -59,10 +59,24 @@ spec:
                 x-kubernetes-validations:
                 - message: name is immutable
                   rule: self == oldSelf
-              passwordSecretName:
-                type: string
+              passwordFromSecret:
+                properties:
+                  key:
+                    type: string
+                  name:
+                    type: string
+                required:
+                - key
+                - name
+                type: object
               replication:
                 type: boolean
+              secretName:
+                type: string
+              secretTemplate:
+                additionalProperties:
+                  type: string
+                type: object
               superUser:
                 type: boolean
             required:

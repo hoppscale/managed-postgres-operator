@@ -17,9 +17,11 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"text/template"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +38,7 @@ import (
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
 	"github.com/hoppscale/managed-postgres-operator/internal/utils"
+	"github.com/jackc/pgx/v5"
 )
 
 const PostgresRoleFinalizer = "postgresrole.managed-postgres-operator.hoppscale.com/finalizer"
@@ -74,27 +77,27 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	rolePassword := ""
 
-	if resource.Spec.PasswordSecretName != "" {
+	// Retrieve password from user-provided Secret or generate it
+	if resource.Spec.PasswordFromSecret != nil {
 		secretNamespacedName := types.NamespacedName{
 			Namespace: resource.ObjectMeta.Namespace,
-			Name:      resource.Spec.PasswordSecretName,
+			Name:      resource.Spec.PasswordFromSecret.Name,
 		}
 
 		resourceSecret := &corev1.Secret{}
 
-		if err := r.Client.Get(ctx, secretNamespacedName, resourceSecret); err != nil {
-			// If the secret doesn't exist, it creates it and generates a password
-			if errors.IsNotFound(err) {
-				rolePassword, err = r.generatePasswordSecret(&secretNamespacedName)
-				if err != nil {
-					return ctrlFailResult, err
-				}
-				r.logging.Info(fmt.Sprintf("Password has been generated and secret created for role \"%s\"", resource.Spec.Name))
-			} else {
-				return ctrlFailResult, client.IgnoreNotFound(err)
-			}
+		err := r.Client.Get(ctx, secretNamespacedName, resourceSecret)
+		if err != nil {
+			return ctrlFailResult, fmt.Errorf("failed to retrieve password from secret: %s", err)
+		}
+
+		rolePassword = string(resourceSecret.Data[resource.Spec.PasswordFromSecret.Key])
+	} else {
+		// If no password is cached, we create a new one
+		if val, ok := r.CacheRolePasswords[resource.Spec.Name]; ok {
+			rolePassword = val
 		} else {
-			rolePassword = string(resourceSecret.Data["password"])
+			rolePassword = r.generatePassword(64)
 		}
 	}
 
@@ -137,26 +140,6 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrlFailResult, err
 		}
 
-		// Remove associated secret if created by operator
-		if resource.Spec.PasswordSecretName != "" {
-			secretNamespacedName := types.NamespacedName{
-				Namespace: resource.ObjectMeta.Namespace,
-				Name:      resource.Spec.PasswordSecretName,
-			}
-
-			resourceSecret := &corev1.Secret{}
-			if err := r.Client.Get(ctx, secretNamespacedName, resourceSecret); err != nil {
-				return ctrlFailResult, client.IgnoreNotFound(err)
-			}
-
-			if val, ok := resourceSecret.Labels["app.kubernetes.io/managed-by"]; ok && val == "managed-postgres-operator.hoppscale.com" {
-				err = r.Client.Delete(ctx, resourceSecret)
-				if err != nil {
-					return ctrlFailResult, client.IgnoreNotFound(err)
-				}
-			}
-		}
-
 		// Remove our finalizer from the list and update it.
 		controllerutil.RemoveFinalizer(resource, PostgresRoleFinalizer)
 		if err := r.Update(ctx, resource); err != nil {
@@ -177,6 +160,17 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	err = r.reconcileRoleMembership(desiredRole.Name, resource.Spec.MemberOfRoles)
+	if err != nil {
+		return ctrlFailResult, err
+	}
+
+	err = r.reconcileRoleSecret(
+		resource.ObjectMeta.Namespace,
+		resource.Spec.SecretName,
+		resource.Spec.SecretTemplate,
+		&desiredRole,
+		r.PGPools.Default.Config().ConnConfig,
+	)
 	if err != nil {
 		return ctrlFailResult, err
 	}
@@ -314,32 +308,115 @@ func (r *PostgresRoleReconciler) reconcileRoleMembership(role string, desiredMem
 	return err
 }
 
-func (r *PostgresRoleReconciler) generatePasswordSecret(secretName *types.NamespacedName) (password string, err error) {
+func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName string, secretTemplate map[string]string, role *postgresql.Role, pgConfig *pgx.ConnConfig) (err error) {
+	// Do not create Secret if no name provided by the user
+	if secretName == "" {
+		return err
+	}
+
+	secretNamespacedName := types.NamespacedName{
+		Namespace: secretNamespace,
+		Name:      secretName,
+	}
+
+	resourceSecret := &corev1.Secret{}
+
+	secretDataTemplateVars := struct {
+		Role     string
+		Password string
+		Host     string
+		Port     string
+		Database string
+	}{
+		Role:     role.Name,
+		Password: role.Password,
+		Host:     pgConfig.Host,
+		Port:     fmt.Sprintf("%d", pgConfig.Port),
+		Database: pgConfig.Database,
+	}
+
+	desiredSecretData := map[string][]byte{
+		"PGUSER":     []byte(secretDataTemplateVars.Role),
+		"PGPASSWORD": []byte(secretDataTemplateVars.Password),
+		"PGHOST":     []byte(secretDataTemplateVars.Host),
+		"PGPORT":     []byte(secretDataTemplateVars.Port),
+		"PGDATABASE": []byte(secretDataTemplateVars.Database),
+	}
+
+	for secretKey, secretValue := range secretTemplate {
+		t := template.Must(template.New("secret").Parse(secretValue))
+		var tpl bytes.Buffer
+		if err := t.Execute(&tpl, secretDataTemplateVars); err != nil {
+			return fmt.Errorf("failed to render secret template: %s", err)
+		}
+		desiredSecretData[secretKey] = tpl.Bytes()
+	}
+
+	// Retrieve Secret
+	err = r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to retrieve secret: %s", err)
+	}
+
+	// If Secret is not found, create it
+	if errors.IsNotFound(err) {
+		resourceSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: secretNamespace,
+				Name:      secretName,
+				Labels: map[string]string{
+					"app.kubernetes.io/managed-by": "managed-postgres-operator.hoppscale.com",
+				},
+			},
+			Type: "Opaque",
+			Data: desiredSecretData,
+		}
+
+		err = r.Client.Create(context.Background(), resourceSecret)
+		if err != nil {
+			return fmt.Errorf("failed to create secret: %s", err)
+		}
+
+		r.logging.Info("Role's secret has been created")
+
+		return err
+	}
+
+	// Update secret if needed
+	toUpdate := false
+	if val, ok := resourceSecret.ObjectMeta.Labels["app.kubernetes.io/managed-by"]; !ok || val != "managed-postgres-operator.hoppscale.com" {
+		if resourceSecret.ObjectMeta.Labels == nil {
+			resourceSecret.ObjectMeta.Labels = make(map[string]string)
+		}
+		resourceSecret.ObjectMeta.Labels["app.kubernetes.io/managed-by"] = "managed-postgres-operator.hoppscale.com"
+		toUpdate = true
+	}
+
+	if fmt.Sprint(resourceSecret.Data) != fmt.Sprint(desiredSecretData) {
+		toUpdate = true
+		resourceSecret.Data = desiredSecretData
+	}
+
+	if toUpdate {
+		err = r.Client.Update(context.Background(), resourceSecret)
+		if err != nil {
+			return fmt.Errorf("failed to update secret: %s", err)
+		}
+		r.logging.Info("Role's secret has been updated")
+	}
+
+	return err
+}
+
+func (r *PostgresRoleReconciler) generatePassword(length int) (password string) {
 	// Generate password
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	random := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 
-	result := make([]byte, 30)
+	result := make([]byte, length)
 	for i := range result {
 		result[i] = charset[random.IntN(len(charset))]
 	}
 
-	// Create K8S secret
-	resourceSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: secretName.Namespace,
-			Name:      secretName.Name,
-			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "managed-postgres-operator.hoppscale.com",
-			},
-		},
-		Type: "Opaque",
-		Data: map[string][]byte{
-			"password": result,
-		},
-	}
-
-	err = r.Client.Create(context.Background(), resourceSecret)
-	password = string(result)
-	return
+	return string(result)
 }
