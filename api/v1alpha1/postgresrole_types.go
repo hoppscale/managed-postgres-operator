@@ -20,6 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type PostgresRolePasswordFromSecret struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
+}
+
 // PostgresRoleSpec defines the desired state of PostgresRole.
 type PostgresRoleSpec struct {
 	// PostgreSQL role name
@@ -35,7 +42,9 @@ type PostgresRoleSpec struct {
 	Replication bool `json:"replication,omitempty"`
 	BypassRLS   bool `json:"bypassRLS,omitempty"`
 
-	PasswordSecretName string `json:"passwordSecretName,omitempty"`
+	PasswordFromSecret *PostgresRolePasswordFromSecret `json:"passwordFromSecret,omitempty"`
+	SecretName         string                          `json:"secretName,omitempty"`
+	SecretTemplate     map[string]string               `json:"secretTemplate,omitempty"`
 
 	MemberOfRoles []string `json:"memberOfRoles,omitempty"`
 }
