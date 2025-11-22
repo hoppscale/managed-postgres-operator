@@ -41,8 +41,8 @@ type PostgresDatabaseSpec struct {
 	// Extensions is the list of database extensions to install on the database.
 	Extensions []string `json:"extensions,omitempty"`
 
-	// KeepDatabaseOnDelete will determine if the deletion of the object should drop the remote PostgreSQL database. Default is false.
-	KeepDatabaseOnDelete bool `json:"keepDatabaseOnDelete,omitempty"`
+	// KeepOnDelete will determine if the deletion of the resource should drop the remote PostgreSQL database. Default is false.
+	KeepOnDelete bool `json:"keepOnDelete,omitempty"`
 
 	// PreserveConnectionsOnDelete will determine if the deletion of the object should drop the existing connections to the remote PostgreSQL database. Default is false.
 	PreserveConnectionsOnDelete bool `json:"preserveConnectionsOnDelete,omitempty"`
