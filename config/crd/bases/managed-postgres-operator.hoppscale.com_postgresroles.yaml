@@ -47,6 +47,8 @@ spec:
                 type: boolean
               inherit:
                 type: boolean
+              keepOnDelete:
+                type: boolean
               login:
                 type: boolean
               memberOfRoles:

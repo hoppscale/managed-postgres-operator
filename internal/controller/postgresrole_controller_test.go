@@ -652,6 +652,56 @@ var _ = Describe("PostgresRole Controller", func() {
 						Fail(err.Error())
 					}
 				})
+
+				It("should not delete role if keepOnDelete is true", func() {
+					resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+					Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+					controllerutil.AddFinalizer(resource, PostgresRoleFinalizer)
+					resource.Spec.KeepOnDelete = true
+					Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+					Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+					controllerReconciler := &PostgresRoleReconciler{
+						Client:             k8sClient,
+						Scheme:             k8sClient.Scheme(),
+						PGPools:            pgpools,
+						CacheRolePasswords: make(map[string]string),
+					}
+
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+						WithArgs("myrole").
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"rolname",
+								"rolsuper",
+								"rolinherit",
+								"rolcreaterole",
+								"rolcreatedb",
+								"rolcanlogin",
+								"rolreplication",
+								"rolbypassrls",
+							}).
+								AddRow(
+									"myrole",
+									false,
+									false,
+									true,
+									true,
+									false,
+									false,
+									false,
+								),
+						)
+
+					_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+						NamespacedName: typeNamespacedName,
+					})
+
+					Expect(err).NotTo(HaveOccurred())
+					if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+						Fail(err.Error())
+					}
+				})
 			})
 			When("no role exists", func() {
 				It("should return immediately", func() {
@@ -664,7 +714,7 @@ var _ = Describe("PostgresRole Controller", func() {
 						CacheRolePasswords: map[string]string{},
 					}
 
-					err := controllerReconciler.reconcileOnDeletion(existingRole)
+					err := controllerReconciler.reconcileOnDeletion(existingRole, false)
 					Expect(err).NotTo(HaveOccurred())
 					for _, poolMock := range pgpoolsMock {
 						if err := poolMock.ExpectationsWereMet(); err != nil {
@@ -672,7 +722,6 @@ var _ = Describe("PostgresRole Controller", func() {
 						}
 					}
 				})
-
 			})
 		})
 	})
