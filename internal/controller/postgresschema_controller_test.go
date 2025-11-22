@@ -379,6 +379,48 @@ var _ = Describe("PostgresSchema Controller", func() {
 					Fail(err.Error())
 				}
 			})
+
+			It("should not drop the schema if keepOnDelete is true", func() {
+				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
+				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+				resource.ObjectMeta.Annotations = map[string]string{
+					utils.OperatorInstanceAnnotationName: "foo",
+				}
+				controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)
+				resource.Spec.KeepOnDelete = true
+				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+				controllerReconciler := &PostgresSchemaReconciler{
+					Client:               k8sClient,
+					Scheme:               k8sClient.Scheme(),
+					PGPools:              pgpools,
+					OperatorInstanceName: "foo",
+				}
+
+				pgpoolsMock["mydb"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetSchemaSQLStatement))).
+					WithArgs("myschema").
+					WillReturnRows(
+						pgxmock.NewRows([]string{
+							"name",
+							"owner",
+						}).
+							AddRow(
+								"myschema",
+								"myrole",
+							),
+					)
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolsMock["mydb"].ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+			})
+
 		})
 
 		When("the resource is deleted but the schema doesn't exist", func() {

@@ -145,9 +145,9 @@ func (r *PostgresDatabaseReconciler) reconcileOnDeletion(resource *managedpostgr
 		return
 	}
 
-	if resource.Spec.KeepDatabaseOnDelete {
+	if resource.Spec.KeepOnDelete {
 		// If the resource is configured to keep the remote database on delete
-		r.logging.Info("KeepDatabaseOnDelete is true, skipping DROP DATABASE")
+		r.logging.Info("keepOnDelete is true, skipping DROP DATABASE")
 		return
 	}
 

@@ -45,10 +45,9 @@ spec:
                 items:
                   type: string
                 type: array
-              keepDatabaseOnDelete:
-                description: KeepDatabaseOnDelete will determine if the deletion of
-                  the object should drop the remote PostgreSQL database. Default is
-                  false.
+              keepOnDelete:
+                description: KeepOnDelete will determine if the deletion of the object
+                  should drop the remote PostgreSQL database. Default is false.
                 type: boolean
               name:
                 description: Name is the PostgreSQL database's name.
@@ -68,7 +67,7 @@ spec:
               privilegesByRole:
                 additionalProperties:
                   description: PostgresDatabasePrivilegesSpec defines the desired
-                    state of PostgresDatabase.
+                    database privileges to grant to roles
                   properties:
                     connect:
                       type: boolean

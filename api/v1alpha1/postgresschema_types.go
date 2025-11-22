@@ -41,6 +41,9 @@ type PostgresSchemaSpec struct {
 	// Owner is the PostgreSQL schema's owner. It must be a valid existing role.
 	Owner string `json:"owner,omitempty"`
 
+	// KeepOnDelete will determine if the deletion of the resource should drop the remote PostgreSQL schema. Default is false.
+	KeepOnDelete bool `json:"keepOnDelete,omitempty"`
+
 	// PrivilegesByRole will grant privileges to roles on this schema
 	PrivilegesByRole map[string]PostgresSchemaPrivilegesSpec `json:"privilegesByRole,omitempty"`
 }

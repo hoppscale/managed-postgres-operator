@@ -406,13 +406,13 @@ var _ = Describe("PostgresDatabase Controller", func() {
 				}
 			})
 
-			It("should return immediately if the option KeepDatabaseOnDelete is set", func() {
+			It("should return immediately if the option `keepOnDelete` is set", func() {
 				existingDatabase := &postgresql.Database{
 					Name: "foo",
 				}
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{
 					Spec: managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabaseSpec{
-						KeepDatabaseOnDelete: true,
+						KeepOnDelete: true,
 					},
 				}
 				controllerReconciler := &PostgresDatabaseReconciler{
