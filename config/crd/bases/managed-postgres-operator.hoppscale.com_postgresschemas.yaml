@@ -47,6 +47,10 @@ spec:
                 x-kubernetes-validations:
                 - message: database is immutable
                   rule: self == oldSelf
+              keepOnDelete:
+                description: KeepOnDelete will determine if the deletion of the resource
+                  should drop the remote PostgreSQL schema. Default is false.
+                type: boolean
               name:
                 description: Name is the PostgreSQL schema's name
                 type: string

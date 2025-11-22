@@ -104,7 +104,7 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrlSuccessResult, nil
 		}
 
-		err = r.reconcileOnDeletion(existingSchema)
+		err = r.reconcileOnDeletion(existingSchema, resource.Spec.KeepOnDelete)
 		if err != nil {
 			return ctrlFailResult, err
 		}
@@ -160,10 +160,16 @@ func (r *PostgresSchemaReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource
-func (r *PostgresSchemaReconciler) reconcileOnDeletion(schema *postgresql.Schema) (err error) {
+func (r *PostgresSchemaReconciler) reconcileOnDeletion(schema *postgresql.Schema, keepOnDelete bool) (err error) {
 	if schema == nil {
 		// If the remote schema doesn't exists
 		r.logging.Info("Schema doesn't exist, skipping DROP SCHEMA")
+		return
+	}
+
+	if keepOnDelete {
+		// If the resource is configured to keep the remote schema on delete
+		r.logging.Info("keepOnDelete is true, skipping DROP SCHEMA")
 		return
 	}
 
