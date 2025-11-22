@@ -135,7 +135,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrlSuccessResult, nil
 		}
 
-		err = r.reconcileOnDeletion(existingRole)
+		err = r.reconcileOnDeletion(existingRole, resource.Spec.KeepOnDelete)
 		if err != nil {
 			return ctrlFailResult, err
 		}
@@ -194,9 +194,15 @@ func (r *PostgresRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource
-func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Role) (err error) {
+func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Role, keepOnDelete bool) (err error) {
 	if existingRole == nil {
 		r.logging.Info("Role doesn't exist, skipping DROP ROLE")
+		return
+	}
+
+	if keepOnDelete {
+		// If the resource is configured to keep the remote role on delete
+		r.logging.Info("keepOnDelete is true, skipping DROP ROLE")
 		return
 	}
 

@@ -42,6 +42,8 @@ type PostgresRoleSpec struct {
 	Replication bool `json:"replication,omitempty"`
 	BypassRLS   bool `json:"bypassRLS,omitempty"`
 
+	KeepOnDelete bool `json:"keepOnDelete,omitempty"`
+
 	PasswordFromSecret *PostgresRolePasswordFromSecret `json:"passwordFromSecret,omitempty"`
 	SecretName         string                          `json:"secretName,omitempty"`
 	SecretTemplate     map[string]string               `json:"secretTemplate,omitempty"`
