@@ -46,7 +46,7 @@ spec:
                   type: string
                 type: array
               keepOnDelete:
-                description: KeepOnDelete will determine if the deletion of the object
+                description: KeepOnDelete will determine if the deletion of the resource
                   should drop the remote PostgreSQL database. Default is false.
                 type: boolean
               name:

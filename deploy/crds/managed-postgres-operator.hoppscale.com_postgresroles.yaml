@@ -48,6 +48,8 @@ spec:
               inherit:
                 type: boolean
               keepOnDelete:
+                description: KeepOnDelete will determine if the deletion of the resource
+                  should drop the remote PostgreSQL role. Default is false.
                 type: boolean
               login:
                 type: boolean
