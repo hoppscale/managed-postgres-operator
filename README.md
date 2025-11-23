@@ -1,42 +1,53 @@
-# managed-postgres-operator
+# Managed Postgres Operator
 
-Managed Postgres Operator aims to manage PostgreSQL resources like databases, roles or functions, directly from a Kubernetes cluster.
+<h1 align="center">
+    <img src="/contrib/logo/logo.svg">
+</h1>
+
+<p align="center">
+  <i align="center">Manage your PostgreSQL resources (databases, roles, schemas, etc.) from your Kubernetes cluster</i>
+</p>
+
+<h4 align="center">
+  <a href="https://github.com/hoppscale/managed-postgres-operator/actions/workflows/test.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/hoppscale/managed-postgres-operator/test.yml?branch=master&label=pipeline&style=flat-square" alt="continuous integration" style="height: 20px;">
+  </a>
+  <a href="https://github.com/hoppscale/managed-postgres-operator/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors-anon/hoppscale/managed-postgres-operator?color=yellow&style=flat-square" alt="contributors" style="height: 20px;">
+  </a>
+  <a href="https://opensource.org/licenses/Apache-2.0">
+    <img src="https://img.shields.io/badge/apache%202.0-blue.svg?style=flat-square&label=license" alt="license" style="height: 20px;">
+  </a>
+  <a>
+    <img src="https://goreportcard.com/badge/github.com/hoppscale/managed-postgres-operator" alt="goreportcard" style="height: 20px;">
+  </a>
+  <br>
+</h4>
+
+## Introduction
+
+Managed Postgres Operator aims to manage PostgreSQL resources like databases, roles, schemas or functions, directly from a Kubernetes cluster.
+
+## Supported Resources
+
+The Managed Postgres Operator currently manages the following resources:
+
+- Databases, with **PostgresDatabase**
+- Roles, with **PostgresRole**
+- Schemas, with **PostgresSchemas**
 
 ## Usage
 
-### PostgresDatabase
+We recommend deploying the [official Docker image](https://github.com/hoppscale/managed-postgres-operator/pkgs/container/managed-postgres-operator), with the [Helm Chart](deploy/charts/managed-postgres-operator), in your Kubernetes cluster.
 
-```yaml
-apiVersion: managed-postgres-operator.hoppscale.com/v1alpha1
-kind: PostgresDatabase
-metadata:
-  name: mydb
-spec:
-  name: mydb # Database's name
-  owner: myrole # Database owner role
-  extensions: # List of extensions to install
-    - plpgsql
-  keepDatabaseOnDelete: true # Should the database be kept if the Kubernetes resource is deleted?
-  preserveConnectionsOnDelete: false # Should the operator wait until the open connections are closed before deleting the database?
-```
+One operator instance must be connected to one PostgreSQL server. If you need to manage mutiple PostgreSQL servers, you will have to deploy as many operators.
 
-### PostgresRole
+## Troubleshooting
 
-```yaml
-apiVersion: managed-postgres-operator.hoppscale.com/v1alpha1
-kind: PostgresRole
-metadata:
-  name: myrole
-spec:
-  name: myrole # Role's name
-  superUser: false # Should the role be a superuser?
-  createDB: false # Should the role be able to create databases?
-  createRole: false # Should the role be able to create roles?
-  inherit: false # Should the role inherit the permissions of the role of which it is a member?
-  login: false # Should the role be able to log in?
-  replication: false # Is the role used for replication?
-  bypassRLS: false # Should the role bypass the defined row-level security (RLS) policies?
-  passwordSecretName: "my-secret" # Name of the secret from where the role's password should be retrieved under the key `password`
-  memberOfRoles: # List of roles the role should be member of
-    - anotherRole
-```
+If you encounter any issues while using the Managed Postgres Operator, we recommend checking the documentation and reviewing the existing [Github issues](https://github.com/hoppscale/managed-postgres-operator/issues) for assistance.
+
+If you think you've identified a bug and can't find a related issue, don't hesitate to [submit a new one](https://github.com/hoppscale/managed-postgres-operator/issues/new)! Make sure to provide as much information as possible about your environment.
+
+## Contributing
+
+We gladly welcome [pull requests](https://github.com/hoppscale/managed-postgres-operator/pulls)! PostgreSQL offers a wide range of features, and the operator currently implements only a small portion of them. Please feel free to suggest improvements or changes to enhance its stability and reliability.
