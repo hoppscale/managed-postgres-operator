@@ -1,0 +1,51 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "managed-postgres-operator.fullname" . }}
+  labels:
+    {{- include "managed-postgres-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - managed-postgres-operator.hoppscale.com
+    resources:
+      - postgresdatabases
+      - postgresroles
+      - postgresschemas
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - managed-postgres-operator.hoppscale.com
+    resources:
+      - postgresdatabases/finalizers
+      - postgresroles/finalizers
+      - postgresschemas/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - managed-postgres-operator.hoppscale.com
+    resources:
+      - postgresdatabases/status
+      - postgresroles/status
+      - postgresschemas/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - update
+      - get
+      - list
+      - watch
+{{- end }}
