@@ -1,0 +1,28 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "managed-postgres-operator.fullname" . }}
+  labels:
+    {{- include "managed-postgres-operator.labels" . | nindent 4 }}
+    {{- with .Values.prometheus.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- if .Values.prometheus.podMonitor.annotations }}
+  annotations:
+    {{- with .Values.prometheus.podMonitor.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  jobLabel: {{ include "managed-postgres-operator.fullname" . }}
+  selector:
+    matchLabels:
+      {{- include "managed-postgres-operator.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: {{ .Values.prometheus.podMonitor.path }}
+      interval: {{ .Values.prometheus.podMonitor.interval }}
+      scrapeTimeout: {{ .Values.prometheus.podMonitor.scrapeTimeout }}
+      honorLabels: {{ .Values.prometheus.podMonitor.honorLabels }}
+{{- end }}

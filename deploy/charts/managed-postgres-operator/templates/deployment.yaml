@@ -43,6 +43,19 @@ spec:
           args:
             - --leader-elect
             - --health-probe-bind-address=:8081
+            {{- if .Values.prometheus.enabled }}
+            - --metrics-bind-address=:8080
+            {{- end }}
+            {{- if .Values.operatorInstanceName }}
+            - --operator-instance-name={{ .Values.operatorInstanceName }}
+            {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 14 }}
+          {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 8080
           livenessProbe:
             httpGet:
               path: /healthz

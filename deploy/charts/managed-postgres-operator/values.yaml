@@ -19,6 +19,10 @@ serviceAccount:
   annotations: {}
   name: ""
 
+operatorInstanceName: ""
+
+extraEnv: []
+
 podAnnotations: {}
 podLabels: {}
 
@@ -40,3 +44,14 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+prometheus:
+  enabled: false
+  podMonitor:
+    enabled: false
+    path: /metrics
+    interval: 60s
+    scrapeTimeout: 30s
+    labels: {}
+    annotations: {}
+    honorLabels: false
