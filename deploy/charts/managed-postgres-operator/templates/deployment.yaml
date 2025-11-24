@@ -51,7 +51,11 @@ spec:
             {{- end }}
           {{- with .Values.extraEnv }}
           env:
-            {{- toYaml . | nindent 14 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
             - name: metrics
