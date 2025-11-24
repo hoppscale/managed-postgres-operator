@@ -1,0 +1,35 @@
+name: Build and publish a Helm chart
+on:
+  push:
+    branches: ['master']
+    paths:
+      - deploy/**
+
+env:
+  CHARTS_REPOSITORY: ghcr.io/${{ github.repository_owner }}/charts
+
+jobs:
+  publish-helm-chart:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    runs-on: ubuntu:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Package and push Helm chart
+        run: |
+          export VERSION=$(yq -r .version ./deploy/charts/managed-postgres-operator/Chart.yaml)
+          helm package ./deploy/charts/managed-postgres-operator
+          helm push ./managed-postgres-operator-${VERSION}.tgz oci://${{ env.CHARTS_REPOSITORY }}/
