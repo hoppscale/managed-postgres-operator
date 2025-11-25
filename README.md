@@ -42,6 +42,8 @@ We recommend deploying the [official Docker image](https://github.com/hoppscale/
 
 One operator instance must be connected to one PostgreSQL server. If you need to manage mutiple PostgreSQL servers, you will have to deploy as many operators.
 
+To install the operator, follow the [installation guide](https://managed-postgres-operator.hoppscale.com/how_to_guides/installation.html).
+
 ## Troubleshooting
 
 If you encounter any issues while using the Managed Postgres Operator, we recommend checking the documentation and reviewing the existing [Github issues](https://github.com/hoppscale/managed-postgres-operator/issues) for assistance.
