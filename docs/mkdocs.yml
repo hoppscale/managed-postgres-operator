@@ -1,0 +1,45 @@
+site_name: Managed Postgres Operator
+repo_url: https://github.com/hoppscale/managed-postgres-operator
+repo_name: hoppscale/managed-postgres-operator
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.path
+    - content.code.annotate
+    - content.code.copy
+  palette:
+    primary: custom
+  favicon: assets/images/logo.svg
+  logo: assets/images/logo-invert.svg
+nav:
+not_in_nav: |
+  /index.md
+
+plugins:
+  - offline
+  - search
+  - awesome-pages
+  - tags
+
+markdown_extensions:
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - footnotes
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - meta
+  - pymdownx.tasklist:
+      custom_checkbox: true
+      clickable_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - assets/stylesheets/extra.css
+extra_javascript:
+  - assets/js/extra.js
