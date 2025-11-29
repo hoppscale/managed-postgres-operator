@@ -50,9 +50,14 @@ func GetRole(pgpool PGPoolInterface, name string) (role *Role, err error) {
 	return
 }
 
-func CreateRole(pgpool PGPoolInterface, role *Role) (err error) {
+func CreateRole(pgpool PGPoolInterface, operatorRole, role *Role) (err error) {
 	sanitizedName := pgx.Identifier{role.Name}.Sanitize()
-	options := generateRoleOptionsString(role)
+
+	options, err := generateRoleOptionsString(operatorRole, &Role{}, role)
+	if err != nil {
+		return err
+	}
+
 	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("CREATE ROLE %s %s", sanitizedName, options))
 	if err != nil {
 		err = fmt.Errorf("pg exec failed: %s", err)
@@ -61,56 +66,106 @@ func CreateRole(pgpool PGPoolInterface, role *Role) (err error) {
 	return
 }
 
-func generateRoleOptionsString(role *Role) string {
-	s := "WITH "
+func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (options string, err error) {
+	rawOptions := "WITH "
 
-	if role.SuperUser {
-		s += "SUPERUSER "
-	} else {
-		s += "NOSUPERUSER "
+	if existingRole.SuperUser != desiredRole.SuperUser {
+		if !operatorRole.SuperUser {
+			err = fmt.Errorf("cannot set SUPERUSER option: the operator's role must have SUPERUSER option")
+			return
+		}
+
+		if desiredRole.SuperUser {
+			rawOptions += "SUPERUSER "
+		} else {
+			rawOptions += "NOSUPERUSER "
+		}
 	}
 
-	if role.Inherit {
-		s += "INHERIT "
-	} else {
-		s += "NOINHERIT "
+	if existingRole.Inherit != desiredRole.Inherit {
+		if !operatorRole.Inherit {
+			err = fmt.Errorf("cannot set INHERIT option: the operator's role must have INHERIT option")
+			return
+		}
+
+		if desiredRole.Inherit {
+			rawOptions += "INHERIT "
+		} else {
+			rawOptions += "NOINHERIT "
+		}
 	}
 
-	if role.CreateRole {
-		s += "CREATEROLE "
-	} else {
-		s += "NOCREATEROLE "
+	if existingRole.CreateRole != desiredRole.CreateRole {
+		if !operatorRole.CreateRole {
+			err = fmt.Errorf("cannot set CREATEROLE option: the operator's role must have CREATEROLE option")
+			return
+		}
+
+		if desiredRole.CreateRole {
+			rawOptions += "CREATEROLE "
+		} else {
+			rawOptions += "NOCREATEROLE "
+		}
 	}
 
-	if role.CreateDB {
-		s += "CREATEDB "
-	} else {
-		s += "NOCREATEDB "
+	if existingRole.CreateDB != desiredRole.CreateDB {
+		if !operatorRole.CreateDB {
+			err = fmt.Errorf("cannot set CREATEDB option: the operator's role must have CREATEDB option")
+			return
+		}
+
+		if desiredRole.CreateDB {
+			rawOptions += "CREATEDB "
+		} else {
+			rawOptions += "NOCREATEDB "
+		}
 	}
 
-	if role.Login {
-		s += "LOGIN "
-	} else {
-		s += "NOLOGIN "
+	if existingRole.Login != desiredRole.Login {
+		if !operatorRole.Login {
+			err = fmt.Errorf("cannot set LOGIN option: the operator's role must have LOGIN option")
+			return
+		}
+
+		if desiredRole.Login {
+			rawOptions += "LOGIN "
+		} else {
+			rawOptions += "NOLOGIN "
+		}
 	}
 
-	if role.Replication {
-		s += "REPLICATION "
-	} else {
-		s += "NOREPLICATION "
+	if existingRole.Replication != desiredRole.Replication {
+		if !operatorRole.Replication {
+			err = fmt.Errorf("cannot set REPLICATION option: the operator's role must have REPLICATION option")
+			return
+		}
+
+		if desiredRole.Replication {
+			rawOptions += "REPLICATION "
+		} else {
+			rawOptions += "NOREPLICATION "
+		}
 	}
 
-	if role.BypassRLS {
-		s += "BYPASSRLS "
-	} else {
-		s += "NOBYPASSRLS "
+	if existingRole.BypassRLS != desiredRole.BypassRLS {
+		if !operatorRole.BypassRLS {
+			err = fmt.Errorf("cannot set BYPASSRLS option: the operator's role must have BYPASSRLS option")
+			return
+		}
+
+		if desiredRole.BypassRLS {
+			rawOptions += "BYPASSRLS "
+		} else {
+			rawOptions += "NOBYPASSRLS "
+		}
 	}
 
-	if role.Password != "" {
-		s += fmt.Sprintf("PASSWORD '%s' ", strings.Replace(role.Password, "'", "''", -1))
+	if desiredRole.Password != "" {
+		rawOptions += fmt.Sprintf("PASSWORD '%s' ", strings.Replace(desiredRole.Password, "'", "''", -1))
 	}
 
-	return s
+	options = rawOptions
+	return
 }
 
 func DropRole(pgpool PGPoolInterface, name string) (err error) {
@@ -123,9 +178,14 @@ func DropRole(pgpool PGPoolInterface, name string) (err error) {
 	return
 }
 
-func AlterRole(pgpool PGPoolInterface, role *Role) (err error) {
-	sanitizedName := pgx.Identifier{role.Name}.Sanitize()
-	options := generateRoleOptionsString(role)
+func AlterRole(pgpool PGPoolInterface, operatorRole, existingRole, desiredRole *Role) (err error) {
+	sanitizedName := pgx.Identifier{desiredRole.Name}.Sanitize()
+
+	options, err := generateRoleOptionsString(operatorRole, existingRole, desiredRole)
+	if err != nil {
+		return err
+	}
+
 	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("ALTER ROLE %s %s", sanitizedName, options))
 	if err != nil {
 		err = fmt.Errorf("pg exec failed: %s", err)

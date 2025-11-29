@@ -183,7 +183,33 @@ var _ = Describe("PostgresRole Controller", func() {
 									"rolbypassrls",
 								}),
 							)
-						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s '.*'$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD`))).
+
+						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+							WithArgs(""). // Refers to the current pgpool user that we cannot mock
+							WillReturnRows(
+								pgxmock.NewRows([]string{
+									"rolname",
+									"rolsuper",
+									"rolinherit",
+									"rolcreaterole",
+									"rolcreatedb",
+									"rolcanlogin",
+									"rolreplication",
+									"rolbypassrls",
+								}).
+									AddRow(
+										"myrole",
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+									),
+							)
+
+						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s '.*'$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD`))).
 							WillReturnResult(pgxmock.NewResult("CREATE ROLE", 1))
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
@@ -332,7 +358,33 @@ var _ = Describe("PostgresRole Controller", func() {
 									"rolbypassrls",
 								}),
 							)
-						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH NOSUPERUSER NOINHERIT CREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'mypassword'`))).
+
+						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+							WithArgs(""). // Refers to the current pgpool user that we cannot mock
+							WillReturnRows(
+								pgxmock.NewRows([]string{
+									"rolname",
+									"rolsuper",
+									"rolinherit",
+									"rolcreaterole",
+									"rolcreatedb",
+									"rolcanlogin",
+									"rolreplication",
+									"rolbypassrls",
+								}).
+									AddRow(
+										"myrole",
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+									),
+							)
+
+						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD 'mypassword'`))).
 							WillReturnResult(pgxmock.NewResult("CREATE ROLE", 1))
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
@@ -390,6 +442,32 @@ var _ = Describe("PostgresRole Controller", func() {
 										false,
 									),
 							)
+
+						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+							WithArgs(""). // Refers to the current pgpool user that we cannot mock
+							WillReturnRows(
+								pgxmock.NewRows([]string{
+									"rolname",
+									"rolsuper",
+									"rolinherit",
+									"rolcreaterole",
+									"rolcreatedb",
+									"rolcanlogin",
+									"rolreplication",
+									"rolbypassrls",
+								}).
+									AddRow(
+										"myrole",
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+									),
+							)
+
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
 							WillReturnRows(
@@ -451,6 +529,32 @@ var _ = Describe("PostgresRole Controller", func() {
 										false,
 									),
 							)
+
+						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+							WithArgs(""). // Refers to the current pgpool user that we cannot mock
+							WillReturnRows(
+								pgxmock.NewRows([]string{
+									"rolname",
+									"rolsuper",
+									"rolinherit",
+									"rolcreaterole",
+									"rolcreatedb",
+									"rolcanlogin",
+									"rolreplication",
+									"rolbypassrls",
+								}).
+									AddRow(
+										"myrole",
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+										true,
+									),
+							)
+
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
 							WillReturnRows(
@@ -551,6 +655,12 @@ var _ = Describe("PostgresRole Controller", func() {
 						CreateDB: true,
 					}
 
+					operatorRole := &postgresql.Role{
+						Name:      "operator",
+						SuperUser: true,
+						CreateDB:  true,
+					}
+
 					controllerReconciler := &PostgresRoleReconciler{
 						Client:             k8sClient,
 						Scheme:             k8sClient.Scheme(),
@@ -558,10 +668,10 @@ var _ = Describe("PostgresRole Controller", func() {
 						CacheRolePasswords: map[string]string{},
 					}
 
-					pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "myrole" WITH NOSUPERUSER NOINHERIT NOCREATEROLE CREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS`))).
+					pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "myrole" WITH CREATEDB`))).
 						WillReturnResult(pgxmock.NewResult("foo", 1))
 
-					err := controllerReconciler.reconcileOnCreation(existingRole, desiredRole)
+					err := controllerReconciler.reconcileOnCreation(operatorRole, existingRole, desiredRole)
 					Expect(err).NotTo(HaveOccurred())
 					for _, poolMock := range pgpoolsMock {
 						if err := poolMock.ExpectationsWereMet(); err != nil {
@@ -640,6 +750,32 @@ var _ = Describe("PostgresRole Controller", func() {
 									false,
 								),
 						)
+
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+						WithArgs(""). // Refers to the current pgpool user that we cannot mock
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"rolname",
+								"rolsuper",
+								"rolinherit",
+								"rolcreaterole",
+								"rolcreatedb",
+								"rolcanlogin",
+								"rolreplication",
+								"rolbypassrls",
+							}).
+								AddRow(
+									"operator",
+									true,
+									true,
+									true,
+									true,
+									true,
+									true,
+									true,
+								),
+						)
+
 					pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP ROLE "myrole"`))).
 						WillReturnResult(pgxmock.NewResult("DROP ROLE", 1))
 
@@ -690,6 +826,31 @@ var _ = Describe("PostgresRole Controller", func() {
 									false,
 									false,
 									false,
+								),
+						)
+
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+						WithArgs(""). // Refers to the current pgpool user that we cannot mock
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"rolname",
+								"rolsuper",
+								"rolinherit",
+								"rolcreaterole",
+								"rolcreatedb",
+								"rolcanlogin",
+								"rolreplication",
+								"rolbypassrls",
+							}).
+								AddRow(
+									"operator",
+									true,
+									true,
+									true,
+									true,
+									true,
+									true,
+									true,
 								),
 						)
 

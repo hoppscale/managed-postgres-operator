@@ -118,6 +118,11 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrlFailResult, fmt.Errorf("failed to get role: %s", err)
 	}
 
+	operatorRole, err := postgresql.GetRole(r.PGPools.Default, r.PGPools.Default.Config().ConnConfig.User)
+	if err != nil {
+		return ctrlFailResult, fmt.Errorf("failed to get operator's role: %s", err)
+	}
+
 	//
 	// Deletion logic
 	//
@@ -154,7 +159,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Creation logic
 	//
 
-	err = r.reconcileOnCreation(existingRole, &desiredRole)
+	err = r.reconcileOnCreation(operatorRole, existingRole, &desiredRole)
 	if err != nil {
 		return ctrlFailResult, err
 	}
@@ -218,9 +223,9 @@ func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Ro
 }
 
 // reconcileOnCreation performs all actions related to creating the resource
-func (r *PostgresRoleReconciler) reconcileOnCreation(existingRole, desiredRole *postgresql.Role) (err error) {
+func (r *PostgresRoleReconciler) reconcileOnCreation(operatorRole, existingRole, desiredRole *postgresql.Role) (err error) {
 	if existingRole == nil {
-		err = postgresql.CreateRole(r.PGPools.Default, desiredRole)
+		err = postgresql.CreateRole(r.PGPools.Default, operatorRole, desiredRole)
 		if err != nil {
 			r.logging.Error(err, "failed to create role")
 			return err
@@ -250,7 +255,7 @@ func (r *PostgresRoleReconciler) reconcileOnCreation(existingRole, desiredRole *
 	}
 
 	if needUpdate {
-		err = postgresql.AlterRole(r.PGPools.Default, desiredRole)
+		err = postgresql.AlterRole(r.PGPools.Default, operatorRole, existingRole, desiredRole)
 		if err != nil {
 			r.logging.Error(err, "failed to alter role")
 			return err

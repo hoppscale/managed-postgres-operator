@@ -206,7 +206,7 @@ var _ = Describe("PostgreSQL Role", func() {
 
 	Context("Calling CreateRole", func() {
 		It("should create a role with the defined options and return no error", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH SUPERUSER NOINHERIT CREATEROLE NOCREATEDB NOLOGIN NOREPLICATION BYPASSRLS PASSWORD 'password'`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH SUPERUSER CREATEROLE BYPASSRLS PASSWORD 'password'`))).
 				WillReturnResult(pgxmock.NewResult("foo", 1))
 
 			role := Role{
@@ -217,7 +217,19 @@ var _ = Describe("PostgreSQL Role", func() {
 				BypassRLS:  true,
 				Password:   "password",
 			}
-			err := CreateRole(pgpool, &role)
+
+			operatorRole := Role{
+				Name:        "postgres",
+				SuperUser:   true,
+				Inherit:     true,
+				CreateRole:  true,
+				CreateDB:    true,
+				Login:       true,
+				Replication: true,
+				BypassRLS:   true,
+			}
+
+			err := CreateRole(pgpool, &operatorRole, &role)
 
 			Expect(err).NotTo(HaveOccurred())
 			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
@@ -226,7 +238,7 @@ var _ = Describe("PostgreSQL Role", func() {
 		})
 
 		It("should return an error if the PostgreSQL request failed", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH NOSUPERUSER INHERIT NOCREATEROLE CREATEDB LOGIN REPLICATION NOBYPASSRLS`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH INHERIT CREATEDB LOGIN REPLICATION`))).
 				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
 			role := Role{
@@ -236,12 +248,52 @@ var _ = Describe("PostgreSQL Role", func() {
 				Login:       true,
 				Replication: true,
 			}
-			err := CreateRole(pgpool, &role)
+
+			operatorRole := Role{
+				Name:        "postgres",
+				SuperUser:   true,
+				Inherit:     true,
+				CreateRole:  true,
+				CreateDB:    true,
+				Login:       true,
+				Replication: true,
+				BypassRLS:   true,
+			}
+
+			err := CreateRole(pgpool, &operatorRole, &role)
 
 			Expect(err).To(HaveOccurred())
 			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
 				Fail(err.Error())
 			}
+		})
+
+		When("operatorRole is not superuser", func() {
+			It("should fail to set SUPERUSER option", func() {
+				role := Role{
+					Name:        "foo",
+					SuperUser:   true,
+					Inherit:     true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+				}
+
+				operatorRole := Role{
+					Name:        "postgres",
+					SuperUser:   false,
+					Inherit:     true,
+					CreateRole:  true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+					BypassRLS:   true,
+				}
+
+				err := CreateRole(pgpool, &operatorRole, &role)
+
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 
@@ -272,7 +324,7 @@ var _ = Describe("PostgreSQL Role", func() {
 
 	Context("Calling AlterRole", func() {
 		It("should update a role with the defined options and return no error", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "foo" WITH SUPERUSER NOINHERIT CREATEROLE NOCREATEDB NOLOGIN NOREPLICATION BYPASSRLS`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "foo" WITH SUPERUSER CREATEROLE BYPASSRLS`))).
 				WillReturnResult(pgxmock.NewResult("foo", 1))
 
 			role := Role{
@@ -282,7 +334,19 @@ var _ = Describe("PostgreSQL Role", func() {
 				CreateRole: true,
 				BypassRLS:  true,
 			}
-			err := AlterRole(pgpool, &role)
+
+			operatorRole := Role{
+				Name:        "operator",
+				SuperUser:   true,
+				Inherit:     true,
+				CreateRole:  true,
+				CreateDB:    true,
+				Login:       true,
+				Replication: true,
+				BypassRLS:   true,
+			}
+
+			err := AlterRole(pgpool, &operatorRole, &Role{}, &role)
 
 			Expect(err).NotTo(HaveOccurred())
 			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
@@ -290,7 +354,7 @@ var _ = Describe("PostgreSQL Role", func() {
 			}
 		})
 		It("should return an error if the PostgreSQL request failed", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "foo" WITH NOSUPERUSER INHERIT NOCREATEROLE CREATEDB LOGIN REPLICATION NOBYPASSRLS`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "foo" WITH INHERIT CREATEDB LOGIN REPLICATION`))).
 				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
 			role := Role{
@@ -300,12 +364,62 @@ var _ = Describe("PostgreSQL Role", func() {
 				Login:       true,
 				Replication: true,
 			}
-			err := AlterRole(pgpool, &role)
+
+			operatorRole := Role{
+				Name:        "operator",
+				SuperUser:   true,
+				Inherit:     true,
+				CreateRole:  true,
+				CreateDB:    true,
+				Login:       true,
+				Replication: true,
+				BypassRLS:   true,
+			}
+
+			err := AlterRole(pgpool, &operatorRole, &Role{}, &role)
 
 			Expect(err).To(HaveOccurred())
 			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
 				Fail(err.Error())
 			}
+		})
+
+		When("operatorRole is not superuser", func() {
+			It("should fail to set SUPERUSER option", func() {
+				role := Role{
+					Name:        "foo",
+					SuperUser:   true,
+					Inherit:     true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+				}
+
+				existingRole := Role{
+					Name:        "foo",
+					SuperUser:   false,
+					Inherit:     true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+				}
+
+				operatorRole := Role{
+					Name:        "postgres",
+					SuperUser:   false,
+					Inherit:     true,
+					CreateRole:  true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+					BypassRLS:   true,
+				}
+
+				err := AlterRole(pgpool, &operatorRole, &existingRole, &role)
+
+				Expect(err).To(HaveOccurred())
+
+			})
 		})
 	})
 })
