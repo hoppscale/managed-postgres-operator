@@ -42,7 +42,7 @@ The Managed Postgres Operator currently manages the following resources:
 
 - Databases, with [PostgresDatabase](reference/api/v1alpha1/index.md#postgresdatabase)
 - Roles, with [PostgresRole](reference/api/v1alpha1/index.md#postgresrole)
-- Schemas, with [PostgresSchemas](reference/api/v1alpha1/index.md#postgresschema)
+- Schemas, with [PostgresSchema](reference/api/v1alpha1/index.md#postgresschema)
 
 ## Usage
 

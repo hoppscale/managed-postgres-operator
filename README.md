@@ -34,7 +34,7 @@ The Managed Postgres Operator currently manages the following resources:
 
 - Databases, with **PostgresDatabase**
 - Roles, with **PostgresRole**
-- Schemas, with **PostgresSchemas**
+- Schemas, with **PostgresSchema**
 
 ## Usage
 
