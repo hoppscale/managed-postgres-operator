@@ -72,7 +72,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.SuperUser != desiredRole.SuperUser {
 		if !operatorRole.SuperUser {
 			err = fmt.Errorf("cannot set SUPERUSER option: the operator's role must have SUPERUSER option")
-			return
+			return "", err
 		}
 
 		if desiredRole.SuperUser {
@@ -85,7 +85,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.Inherit != desiredRole.Inherit {
 		if !operatorRole.Inherit {
 			err = fmt.Errorf("cannot set INHERIT option: the operator's role must have INHERIT option")
-			return
+			return "", err
 		}
 
 		if desiredRole.Inherit {
@@ -98,7 +98,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.CreateRole != desiredRole.CreateRole {
 		if !operatorRole.CreateRole {
 			err = fmt.Errorf("cannot set CREATEROLE option: the operator's role must have CREATEROLE option")
-			return
+			return "", err
 		}
 
 		if desiredRole.CreateRole {
@@ -111,7 +111,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.CreateDB != desiredRole.CreateDB {
 		if !operatorRole.CreateDB {
 			err = fmt.Errorf("cannot set CREATEDB option: the operator's role must have CREATEDB option")
-			return
+			return "", err
 		}
 
 		if desiredRole.CreateDB {
@@ -124,7 +124,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.Login != desiredRole.Login {
 		if !operatorRole.Login {
 			err = fmt.Errorf("cannot set LOGIN option: the operator's role must have LOGIN option")
-			return
+			return "", err
 		}
 
 		if desiredRole.Login {
@@ -137,7 +137,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.Replication != desiredRole.Replication {
 		if !operatorRole.Replication {
 			err = fmt.Errorf("cannot set REPLICATION option: the operator's role must have REPLICATION option")
-			return
+			return "", err
 		}
 
 		if desiredRole.Replication {
@@ -150,7 +150,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	if existingRole.BypassRLS != desiredRole.BypassRLS {
 		if !operatorRole.BypassRLS {
 			err = fmt.Errorf("cannot set BYPASSRLS option: the operator's role must have BYPASSRLS option")
-			return
+			return "", err
 		}
 
 		if desiredRole.BypassRLS {
@@ -165,7 +165,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	}
 
 	options = rawOptions
-	return
+	return options, nil
 }
 
 func DropRole(pgpool PGPoolInterface, name string) (err error) {
