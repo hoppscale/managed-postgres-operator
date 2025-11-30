@@ -22,11 +22,15 @@ import (
 	"slices"
 	"time"
 
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
@@ -42,6 +46,8 @@ type PostgresSchemaReconciler struct {
 	Scheme  *runtime.Scheme
 	logging logr.Logger
 
+	RequeueInterval time.Duration
+
 	PGPools              *postgresql.PGPools
 	OperatorInstanceName string
 }
@@ -52,29 +58,26 @@ type PostgresSchemaReconciler struct {
 func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.logging = log.FromContext(ctx)
 
-	ctrlSuccessResult := ctrl.Result{RequeueAfter: time.Minute}
-	ctrlFailResult := ctrl.Result{}
-
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 
 	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
-		return ctrlFailResult, client.IgnoreNotFound(err)
+		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
 	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	err := postgresql.EnsurePGPoolExists(r.PGPools, resource.Spec.Database)
 	if err != nil {
 		r.logging.Error(err, "failed to open pg pool")
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	existingSchema, err := postgresql.GetSchema(r.PGPools.Databases[resource.Spec.Database], resource.Spec.Name)
 	if err != nil {
-		return ctrlFailResult, fmt.Errorf("failed to retrieve schema: %s", err)
+		return r.Result(fmt.Errorf("failed to retrieve schema: %s", err))
 	}
 
 	if existingSchema != nil {
@@ -87,36 +90,37 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Owner:    resource.Spec.Owner,
 	}
 
-	//
-	// Deletion logic
-	//
-
 	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresSchemaFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)
 			if err := r.Update(ctx, resource); err != nil {
-				return ctrlFailResult, err
+				return r.Result(err)
 			}
 		}
 	} else {
+
+		//
+		// Deletion logic
+		//
+
 		// If there is no finalizer, delete the resource immediately
 		if !controllerutil.ContainsFinalizer(resource, PostgresSchemaFinalizer) {
-			return ctrlSuccessResult, nil
+			return r.Result(nil)
 		}
 
 		err = r.reconcileOnDeletion(existingSchema, resource.Spec.KeepOnDelete)
 		if err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Remove our finalizer from the list and update it.
 		controllerutil.RemoveFinalizer(resource, PostgresSchemaFinalizer)
 		if err := r.Update(ctx, resource); err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Stop reconciliation as the item is being deleted
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	//
@@ -125,13 +129,13 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	err = r.reconcileOnCreation(existingSchema, &desiredSchema)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	if !resource.Status.Succeeded {
 		resource.Status.Succeeded = true
 		if err = r.Client.Status().Update(context.Background(), resource); err != nil {
-			return ctrlFailResult, fmt.Errorf("failed to update object: %s", err)
+			return r.Result(fmt.Errorf("failed to update object: %s", err))
 		}
 	}
 
@@ -143,11 +147,11 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			r.convertPrivilegesSpecToList(rolePrivileges),
 		)
 		if err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 	}
 
-	return ctrlSuccessResult, nil
+	return r.Result(nil)
 
 }
 
@@ -156,7 +160,21 @@ func (r *PostgresSchemaReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}).
 		Named("postgresschema").
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](time.Second, r.RequeueInterval),
+				&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+			),
+		}).
 		Complete(r)
+}
+
+// Result builds reconciler result depending on error
+func (r *PostgresSchemaReconciler) Result(err error) (ctrl.Result, error) {
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: r.RequeueInterval}, nil
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource

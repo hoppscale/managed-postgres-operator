@@ -20,6 +20,7 @@ serviceAccount:
   name: ""
 
 operatorInstanceName: ""
+reconciliationRequeueInterval: ""
 
 extraEnv: []
 envFrom: []

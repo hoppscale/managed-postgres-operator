@@ -49,6 +49,9 @@ spec:
             {{- if .Values.operatorInstanceName }}
             - --operator-instance-name={{ .Values.operatorInstanceName }}
             {{- end }}
+            {{- if .Values.reconciliationRequeueInterval }}
+            - --reconciliation-requeue-interval={{ .Values.reconciliationRequeueInterval }}
+            {{- end }}
           {{- with .Values.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}
