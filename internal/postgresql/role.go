@@ -58,6 +58,8 @@ func CreateRole(pgpool PGPoolInterface, operatorRole, role *Role) (err error) {
 		return err
 	}
 
+	options += fmt.Sprintf("ADMIN %s", pgx.Identifier{operatorRole.Name}.Sanitize())
+
 	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("CREATE ROLE %s %s", sanitizedName, options))
 	if err != nil {
 		err = fmt.Errorf("pg exec failed: %s", err)

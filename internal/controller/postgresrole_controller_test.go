@@ -198,7 +198,7 @@ var _ = Describe("PostgresRole Controller", func() {
 									"rolbypassrls",
 								}).
 									AddRow(
-										"myrole",
+										"operator",
 										true,
 										true,
 										true,
@@ -209,7 +209,7 @@ var _ = Describe("PostgresRole Controller", func() {
 									),
 							)
 
-						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s '.*'$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD`))).
+						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s '.*' ADMIN \"operator\"$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD`))).
 							WillReturnResult(pgxmock.NewResult("CREATE ROLE", 1))
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
@@ -373,7 +373,7 @@ var _ = Describe("PostgresRole Controller", func() {
 									"rolbypassrls",
 								}).
 									AddRow(
-										"myrole",
+										"operator",
 										true,
 										true,
 										true,
@@ -384,7 +384,7 @@ var _ = Describe("PostgresRole Controller", func() {
 									),
 							)
 
-						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD 'mypassword'`))).
+						pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "myrole" WITH CREATEROLE CREATEDB PASSWORD 'mypassword' ADMIN "operator"`))).
 							WillReturnResult(pgxmock.NewResult("CREATE ROLE", 1))
 						pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
 							WithArgs("myrole").
