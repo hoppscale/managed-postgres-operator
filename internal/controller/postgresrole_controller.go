@@ -24,15 +24,19 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
@@ -49,6 +53,8 @@ type PostgresRoleReconciler struct {
 	Scheme  *runtime.Scheme
 	logging logr.Logger
 
+	RequeueInterval time.Duration
+
 	PGPools              *postgresql.PGPools
 	OperatorInstanceName string
 
@@ -61,18 +67,15 @@ type PostgresRoleReconciler struct {
 func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.logging = log.FromContext(ctx)
 
-	ctrlSuccessResult := ctrl.Result{RequeueAfter: time.Minute}
-	ctrlFailResult := ctrl.Result{RequeueAfter: time.Second}
-
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 
 	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
-		return ctrlFailResult, client.IgnoreNotFound(err)
+		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
 	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	rolePassword := ""
@@ -88,7 +91,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		err := r.Client.Get(ctx, secretNamespacedName, resourceSecret)
 		if err != nil {
-			return ctrlFailResult, fmt.Errorf("failed to retrieve password from secret: %s", err)
+			return r.Result(fmt.Errorf("failed to retrieve password from secret: %s", err))
 		}
 
 		rolePassword = string(resourceSecret.Data[resource.Spec.PasswordFromSecret.Key])
@@ -115,44 +118,45 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	existingRole, err := postgresql.GetRole(r.PGPools.Default, resource.Spec.Name)
 	if err != nil {
-		return ctrlFailResult, fmt.Errorf("failed to get role: %s", err)
+		return r.Result(fmt.Errorf("failed to get role: %s", err))
 	}
 
 	operatorRole, err := postgresql.GetRole(r.PGPools.Default, r.PGPools.Default.Config().ConnConfig.User)
 	if err != nil {
-		return ctrlFailResult, fmt.Errorf("failed to get operator's role: %s", err)
+		return r.Result(fmt.Errorf("failed to get operator's role: %s", err))
 	}
-
-	//
-	// Deletion logic
-	//
 
 	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresRoleFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresRoleFinalizer)
 			if err := r.Update(ctx, resource); err != nil {
-				return ctrlFailResult, err
+				return r.Result(err)
 			}
 		}
 	} else {
+
+		//
+		// Deletion logic
+		//
+
 		// If there is no finalizer, delete the resource immediately
 		if !controllerutil.ContainsFinalizer(resource, PostgresRoleFinalizer) {
-			return ctrlSuccessResult, nil
+			return r.Result(nil)
 		}
 
 		err = r.reconcileOnDeletion(existingRole, resource.Spec.KeepOnDelete)
 		if err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Remove our finalizer from the list and update it.
 		controllerutil.RemoveFinalizer(resource, PostgresRoleFinalizer)
 		if err := r.Update(ctx, resource); err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Stop reconciliation as the item is being deleted
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	//
@@ -161,12 +165,12 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	err = r.reconcileOnCreation(operatorRole, existingRole, &desiredRole)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	err = r.reconcileRoleMembership(desiredRole.Name, resource.Spec.MemberOfRoles)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	err = r.reconcileRoleSecret(
@@ -177,17 +181,17 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.PGPools.Default.Config().ConnConfig,
 	)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	if !resource.Status.Succeeded {
 		resource.Status.Succeeded = true
 		if err = r.Client.Status().Update(context.Background(), resource); err != nil {
-			return ctrlFailResult, fmt.Errorf("failed to update object: %s", err)
+			return r.Result(fmt.Errorf("failed to update object: %s", err))
 		}
 	}
 
-	return ctrlSuccessResult, nil
+	return r.Result(nil)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -195,7 +199,21 @@ func (r *PostgresRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}).
 		Named("postgresrole").
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](time.Second, r.RequeueInterval),
+				&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+			),
+		}).
 		Complete(r)
+}
+
+// Result builds reconciler result depending on error
+func (r *PostgresRoleReconciler) Result(err error) (ctrl.Result, error) {
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: r.RequeueInterval}, nil
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource
@@ -213,8 +231,7 @@ func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Ro
 
 	err = postgresql.DropRole(r.PGPools.Default, existingRole.Name)
 	if err != nil {
-		r.logging.Error(err, "failed to delete role")
-		return
+		return fmt.Errorf("failed to delete role: %s", err)
 	}
 
 	r.logging.Info("Role has been deleted")

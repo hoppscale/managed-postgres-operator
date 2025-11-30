@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -50,6 +51,7 @@ func main() {
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
 	var operatorInstanceName string
+	var reconciliationRequeueInterval time.Duration
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -66,6 +68,8 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&operatorInstanceName, "operator-instance-name", "", "The name of this operator instance.")
+	flag.DurationVar(&reconciliationRequeueInterval, "reconciliation-requeue-interval", 5*time.Minute,
+		"Default interval between resource reconciliation")
 
 	opts := zap.Options{
 		Development:     true,
@@ -180,6 +184,7 @@ func main() {
 	if err = (&controller.PostgresDatabaseReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
+		RequeueInterval:      reconciliationRequeueInterval,
 		PGPools:              pgpools,
 		OperatorInstanceName: operatorInstanceName,
 	}).SetupWithManager(mgr); err != nil {
@@ -190,6 +195,7 @@ func main() {
 	if err = (&controller.PostgresRoleReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
+		RequeueInterval:      reconciliationRequeueInterval,
 		PGPools:              pgpools,
 		OperatorInstanceName: operatorInstanceName,
 		CacheRolePasswords:   cacheRolePasswords,
@@ -200,6 +206,7 @@ func main() {
 	if err = (&controller.PostgresSchemaReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
+		RequeueInterval:      reconciliationRequeueInterval,
 		PGPools:              pgpools,
 		OperatorInstanceName: operatorInstanceName,
 	}).SetupWithManager(mgr); err != nil {

@@ -7,12 +7,16 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"golang.org/x/time/rate"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	managedpostgresoperatorhoppscalecomv1alpha1 "github.com/hoppscale/managed-postgres-operator/api/v1alpha1"
 	"github.com/hoppscale/managed-postgres-operator/internal/postgresql"
@@ -27,6 +31,8 @@ type PostgresDatabaseReconciler struct {
 	Scheme  *runtime.Scheme
 	logging logr.Logger
 
+	RequeueInterval time.Duration
+
 	PGPools              *postgresql.PGPools
 	OperatorInstanceName string
 }
@@ -37,23 +43,20 @@ type PostgresDatabaseReconciler struct {
 func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.logging = log.FromContext(ctx)
 
-	ctrlSuccessResult := ctrl.Result{RequeueAfter: time.Minute}
-	ctrlFailResult := ctrl.Result{}
-
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{}
 
 	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
-		return ctrlFailResult, client.IgnoreNotFound(err)
+		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
 	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	existingDatabase, err := postgresql.GetDatabase(r.PGPools.Default, resource.Spec.Name)
 	if err != nil {
-		return ctrlFailResult, fmt.Errorf("failed to retrieve database: %s", err)
+		return r.Result(fmt.Errorf("failed to retrieve database: %s", err))
 	}
 
 	desiredDatabase := postgresql.Database{
@@ -62,36 +65,37 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		Extensions: resource.Spec.Extensions,
 	}
 
-	//
-	// Deletion logic
-	//
-
 	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresDatabaseFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresDatabaseFinalizer)
 			if err := r.Update(ctx, resource); err != nil {
-				return ctrlFailResult, err
+				return r.Result(err)
 			}
 		}
 	} else {
+
+		//
+		// Deletion logic
+		//
+
 		// If there is no finalizer, delete the resource immediately
 		if !controllerutil.ContainsFinalizer(resource, PostgresDatabaseFinalizer) {
-			return ctrlSuccessResult, nil
+			return r.Result(nil)
 		}
 
 		err = r.reconcileOnDeletion(resource, existingDatabase)
 		if err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Remove our finalizer from the list and update it.
 		controllerutil.RemoveFinalizer(resource, PostgresDatabaseFinalizer)
 		if err := r.Update(ctx, resource); err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 
 		// Stop reconciliation as the item is being deleted
-		return ctrlSuccessResult, nil
+		return r.Result(nil)
 	}
 
 	//
@@ -100,12 +104,12 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	err = r.reconcileOnCreation(existingDatabase, &desiredDatabase)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	err = r.reconcileExtensions(&desiredDatabase)
 	if err != nil {
-		return ctrlFailResult, err
+		return r.Result(err)
 	}
 
 	for roleName, rolePrivileges := range resource.Spec.PrivilegesByRole {
@@ -115,18 +119,18 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			r.convertPrivilegesSpecToList(rolePrivileges),
 		)
 		if err != nil {
-			return ctrlFailResult, err
+			return r.Result(err)
 		}
 	}
 
 	if !resource.Status.Succeeded {
 		resource.Status.Succeeded = true
 		if err = r.Client.Status().Update(context.Background(), resource); err != nil {
-			return ctrlFailResult, fmt.Errorf("failed to update object: %s", err)
+			return r.Result(fmt.Errorf("failed to update object: %s", err))
 		}
 	}
 
-	return ctrlSuccessResult, nil
+	return r.Result(nil)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -134,7 +138,21 @@ func (r *PostgresDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{}).
 		Named("postgresdatabase").
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](time.Second, r.RequeueInterval),
+				&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+			),
+		}).
 		Complete(r)
+}
+
+// Result builds reconciler result depending on error
+func (r *PostgresDatabaseReconciler) Result(err error) (ctrl.Result, error) {
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: r.RequeueInterval}, nil
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource
