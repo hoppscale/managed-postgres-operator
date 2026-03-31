@@ -27,6 +27,11 @@ type PostgresRolePasswordFromSecret struct {
 	Key string `json:"key"`
 }
 
+// PostgresRoleOnDeleteSpec holds the options to change the operator's behavior when deleting a resource.
+type PostgresRoleOnDeleteSpec struct {
+	ReassignOwnedTo string `json:"reassignOwnedTo,omitempty"`
+}
+
 // PostgresRoleSpec defines the desired state of PostgresRole.
 type PostgresRoleSpec struct {
 	// PostgreSQL role name
@@ -50,6 +55,8 @@ type PostgresRoleSpec struct {
 	SecretTemplate     map[string]string               `json:"secretTemplate,omitempty"`
 
 	MemberOfRoles []string `json:"memberOfRoles,omitempty"`
+
+	OnDelete *PostgresRoleOnDeleteSpec `json:"onDelete,omitempty"`
 }
 
 // PostgresRoleStatus defines the observed state of PostgresRole.

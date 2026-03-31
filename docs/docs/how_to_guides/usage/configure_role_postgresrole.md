@@ -219,3 +219,20 @@ spec:
 ```
 
 In this example, we assign our role `myrole` to the role `admin-role`.
+
+## Change the objects' ownership before deleting the role
+
+You can configure the resource to change the ownership on the objects that the role owns by setting the option `onDelete.reassignOwnedTo`.
+
+The value is the name of a role that must already exist in the PostgreSQL instance.
+
+```yaml
+apiVersion: managed-postgres-operator.hoppscale.com/v1alpha1
+kind: PostgresRole
+metadata:
+  name: myrole
+spec:
+  name: myrole
+  onDelete:
+    reassignOwnedTo: myotherrole
+```

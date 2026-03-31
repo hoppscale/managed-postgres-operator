@@ -867,6 +867,7 @@ var _ = Describe("PostgresRole Controller", func() {
 			When("no role exists", func() {
 				It("should return immediately", func() {
 					var existingRole *postgresql.Role
+					var onDeleteOptions *managedpostgresoperatorhoppscalecomv1alpha1.PostgresRoleOnDeleteSpec
 
 					controllerReconciler := &PostgresRoleReconciler{
 						Client:             k8sClient,
@@ -875,7 +876,7 @@ var _ = Describe("PostgresRole Controller", func() {
 						CacheRolePasswords: map[string]string{},
 					}
 
-					err := controllerReconciler.reconcileOnDeletion(existingRole, false)
+					err := controllerReconciler.reconcileOnDeletion(existingRole, false, onDeleteOptions)
 					Expect(err).NotTo(HaveOccurred())
 					for _, poolMock := range pgpoolsMock {
 						if err := poolMock.ExpectationsWereMet(); err != nil {
@@ -884,6 +885,68 @@ var _ = Describe("PostgresRole Controller", func() {
 					}
 				})
 			})
+
+			When("reassignOwnedTo is configured", func() {
+				It("reassign owned objects before deletion", func() {
+					existingRole := &postgresql.Role{
+						Name: "myrole",
+					}
+					onDeleteOptions := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRoleOnDeleteSpec{
+						ReassignOwnedTo: "myrolebis",
+					}
+
+					databases := []string{
+						"postgres",
+						"foo",
+					}
+
+					for _, database := range databases {
+						mock, err := pgxmock.NewPool()
+						if err != nil {
+							Fail(err.Error())
+						}
+						pgpoolsMock[database] = mock
+						pgpools.Databases[database] = pgpoolsMock[database]
+					}
+
+					pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta("SELECT datname FROM pg_database WHERE datistemplate = false"))).
+						WillReturnRows(
+							pgxmock.NewRows([]string{
+								"datname",
+							}).
+								AddRow(
+									"postgres",
+								).
+								AddRow(
+									"foo",
+								),
+						)
+
+					for _, database := range databases {
+						pgpoolsMock[database].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`REASSIGN OWNED BY "myrole" TO "myrolebis"`))).
+							WillReturnResult(pgxmock.NewResult("REASSIGN OWNED", 1))
+					}
+
+					pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`DROP ROLE "myrole"`))).
+						WillReturnResult(pgxmock.NewResult("DROP ROLE", 1))
+
+					controllerReconciler := &PostgresRoleReconciler{
+						Client:             k8sClient,
+						Scheme:             k8sClient.Scheme(),
+						PGPools:            pgpools,
+						CacheRolePasswords: map[string]string{},
+					}
+
+					err := controllerReconciler.reconcileOnDeletion(existingRole, false, onDeleteOptions)
+					Expect(err).NotTo(HaveOccurred())
+					for _, poolMock := range pgpoolsMock {
+						if err := poolMock.ExpectationsWereMet(); err != nil {
+							Fail(err.Error())
+						}
+					}
+				})
+			})
+
 		})
 	})
 })

@@ -195,3 +195,15 @@ func AlterRole(pgpool PGPoolInterface, operatorRole, existingRole, desiredRole *
 	}
 	return
 }
+
+func ReassignOwnedToRole(pgpool PGPoolInterface, oldRole, newRole string) (err error) {
+	sanitizedOldRoleName := pgx.Identifier{oldRole}.Sanitize()
+	sanitizedNewRoleName := pgx.Identifier{newRole}.Sanitize()
+
+	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("REASSIGN OWNED BY %s TO %s", sanitizedOldRoleName, sanitizedNewRoleName))
+	if err != nil {
+		err = fmt.Errorf("pg exec failed: %s", err)
+		return
+	}
+	return
+}

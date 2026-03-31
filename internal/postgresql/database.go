@@ -171,3 +171,20 @@ func RevokeDatabaseRolePrivilege(pgpool PGPoolInterface, database, role, privile
 
 	return
 }
+
+func ListDatabases(pgpool PGPoolInterface) (databases []string, err error) {
+	rows, err := pgpool.Query(context.Background(), "SELECT datname FROM pg_database WHERE datistemplate = false")
+	if err != nil {
+		err = fmt.Errorf("pg query failed: %s", err)
+		return
+	}
+	defer rows.Close()
+
+	databases, err = pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		err = fmt.Errorf("failed to collect rows: %s", err)
+		return
+	}
+
+	return
+}

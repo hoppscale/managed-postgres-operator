@@ -481,4 +481,43 @@ var _ = Describe("PostgreSQL Database", func() {
 
 	})
 
+	Context("Calling ListDatabases", func() {
+		It("should return a list of databases without templates", func() {
+			pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT datname FROM pg_database WHERE datistemplate = false`))).
+				WillReturnRows(
+					pgxmock.NewRows([]string{
+						"datname",
+					}).
+						AddRow(
+							"foo",
+						).
+						AddRow(
+							"postgres",
+						),
+				)
+
+			databases, err := ListDatabases(pgpool)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(databases).To(Equal([]string{"foo", "postgres"}))
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+		It("should return an error if the PostgreSQL request failed", func() {
+			pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SELECT datname FROM pg_database WHERE datistemplate = false`))).
+				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
+
+			databases, err := ListDatabases(pgpool)
+
+			Expect(err).To(HaveOccurred())
+			Expect(databases).To(BeEmpty())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+
+	})
+
 })
