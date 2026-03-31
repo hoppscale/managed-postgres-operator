@@ -61,7 +61,7 @@ This resource aims to implement most of the PostgreSQL role's parameters: [https
 | **`apiVersion`**<br />*string*                                                                                              | :material-check: | `managed-postgres-operator.hoppscale.com/v1alpha1`            |
 | **`kind`**<br />*string*                                                                                                    | :material-check: | `PostgresRole`                                            |
 | **`metadata`**<br />*[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#objectmeta-v1-meta)* | :material-check: | Refer to Kubernetes API documentation for fields of metadata. |
-| role **`spec`**<br />*[PostgresRoleSpec](#postgresrolespec)*                                                             | :material-check: |                                                               |
+| **`spec`**<br />*[PostgresRoleSpec](#postgresrolespec)*                                                             | :material-check: |                                                               |
 | **`status`**<br />*[PostgresRoleStatus](#postgresrolestatus)*                                                       | :material-minus: |                                                               |
 
 ### PostgresRoleSpec
@@ -83,6 +83,15 @@ PostgresRoleSpec holds the specification of a PostgreSQL role.
 | **`secretName`**<br />*string* | :material-close: | Name of the Secret the operator should create, containing the role's log in information.<br />*Default: `""`* |
 | **`secretTemplate`**<br />*map[string]string* | :material-close: | Dictionnary containing the key/value to configure in the Secret created by the operator (cf. `secretName`).<br />*Default: `{}`* |
 | **`memberOfRoles`**<br />*[]string* | :material-close: | List of role's names of which the role should be member of.<br />*Default: `[]`* |
+| **`onDelete`**<br />*[PostgresRoleOnDeleteSpec](#postgresroleondeletespec)* | :material-close: | Options to change the operator's default behavior on resource deletion.<br />*Default: `nil`* |
+
+### PostgresRoleOnDeleteSpec
+
+PostgresRoleOnDeleteSpec holds the options to change the operator's behavior when deleting a resource.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **`reassignOwnedTo`**<br />*string* | :material-close: | Reassign objects owned by the current role to another.<br />*Default: `""`* |
 
 ### PostgresRoleStatus
 

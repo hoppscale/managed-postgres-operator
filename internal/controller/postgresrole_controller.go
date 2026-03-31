@@ -144,7 +144,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return r.Result(nil)
 		}
 
-		err = r.reconcileOnDeletion(existingRole, resource.Spec.KeepOnDelete)
+		err = r.reconcileOnDeletion(existingRole, resource.Spec.KeepOnDelete, resource.Spec.OnDelete)
 		if err != nil {
 			return r.Result(err)
 		}
@@ -217,16 +217,38 @@ func (r *PostgresRoleReconciler) Result(err error) (ctrl.Result, error) {
 }
 
 // reconcileOnDeletion performs all actions related to deleting the resource
-func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Role, keepOnDelete bool) (err error) {
+func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Role, keepOnDelete bool, onDeleteOptions *managedpostgresoperatorhoppscalecomv1alpha1.PostgresRoleOnDeleteSpec) (err error) {
 	if existingRole == nil {
 		r.logging.Info("Role doesn't exist, skipping DROP ROLE")
-		return
+		return nil
 	}
 
 	if keepOnDelete {
 		// If the resource is configured to keep the remote role on delete
 		r.logging.Info("keepOnDelete is true, skipping DROP ROLE")
-		return
+		return nil
+	}
+
+	if onDeleteOptions != nil {
+		if onDeleteOptions.ReassignOwnedTo != "" {
+			databases, err := postgresql.ListDatabases(r.PGPools.Default)
+			if err != nil {
+				return fmt.Errorf("failed to list databases: %s", err)
+			}
+
+			for _, database := range databases {
+				err := postgresql.EnsurePGPoolExists(r.PGPools, database)
+				if err != nil {
+					return fmt.Errorf("failed to open pg pool: %s", err)
+				}
+
+				err = postgresql.ReassignOwnedToRole(r.PGPools.Databases[database], existingRole.Name, onDeleteOptions.ReassignOwnedTo)
+				if err != nil {
+					return fmt.Errorf("failed to reassign owned objects in database before deletion: %s", err)
+				}
+			}
+			r.logging.Info(fmt.Sprintf("Objects owned by '%s' have been reassigned to '%s'", existingRole.Name, onDeleteOptions.ReassignOwnedTo))
+		}
 	}
 
 	err = postgresql.DropRole(r.PGPools.Default, existingRole.Name)
@@ -236,7 +258,7 @@ func (r *PostgresRoleReconciler) reconcileOnDeletion(existingRole *postgresql.Ro
 
 	r.logging.Info("Role has been deleted")
 
-	return
+	return nil
 }
 
 // reconcileOnCreation performs all actions related to creating the resource

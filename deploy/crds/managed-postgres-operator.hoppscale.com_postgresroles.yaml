@@ -63,6 +63,13 @@ spec:
                 x-kubernetes-validations:
                 - message: name is immutable
                   rule: self == oldSelf
+              onDelete:
+                description: PostgresRoleOnDeleteSpec holds the options to change
+                  the operator's behavior when deleting a resource.
+                properties:
+                  reassignOwnedTo:
+                    type: string
+                type: object
               passwordFromSecret:
                 properties:
                   key:

@@ -422,4 +422,30 @@ var _ = Describe("PostgreSQL Role", func() {
 			})
 		})
 	})
+
+	Context("Calling ReassignOwnedToRole", func() {
+		It("should reassign owned objects to a new role", func() {
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`REASSIGN OWNED BY "foo" TO "bar"`))).
+				WillReturnResult(pgxmock.NewResult("bar", 1))
+
+			err := ReassignOwnedToRole(pgpool, "foo", "bar")
+
+			Expect(err).NotTo(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+		It("should return an error if the PostgreSQL request failed", func() {
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`REASSIGN OWNED BY "foo" TO "bar"`))).
+				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
+
+			err := ReassignOwnedToRole(pgpool, "foo", "bar")
+
+			Expect(err).To(HaveOccurred())
+			if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+				Fail(err.Error())
+			}
+		})
+	})
+
 })
