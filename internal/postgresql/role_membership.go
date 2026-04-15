@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -21,6 +22,10 @@ func GetRoleMembership(pgpool PGPoolInterface, role string) (membership []string
 	if err != nil {
 		err = fmt.Errorf("failed to collect rows: %s", err)
 		return
+	}
+
+	for i, group := range membership {
+		membership[i] = strings.Trim(group, "\"")
 	}
 
 	return

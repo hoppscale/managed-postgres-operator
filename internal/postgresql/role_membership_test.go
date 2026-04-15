@@ -57,10 +57,10 @@ var _ = Describe("PostgreSQL Role", func() {
 							"group_role",
 						}).
 							AddRow(
-								"alpha",
+								"\"alpha\"",
 							).
 							AddRow(
-								"beta",
+								"\"beta\"",
 							),
 					)
 
