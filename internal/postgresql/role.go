@@ -163,7 +163,7 @@ func generateRoleOptionsString(operatorRole, existingRole, desiredRole *Role) (o
 	}
 
 	if desiredRole.Password != "" {
-		rawOptions += fmt.Sprintf("PASSWORD '%s' ", strings.Replace(desiredRole.Password, "'", "''", -1))
+		rawOptions += fmt.Sprintf("PASSWORD '%s' ", strings.ReplaceAll(desiredRole.Password, "'", "''"))
 	}
 
 	options = rawOptions
