@@ -78,30 +78,9 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.Result(nil)
 	}
 
-	rolePassword := ""
-
-	// Retrieve password from user-provided Secret or generate it
-	if resource.Spec.PasswordFromSecret != nil {
-		secretNamespacedName := types.NamespacedName{
-			Namespace: resource.ObjectMeta.Namespace,
-			Name:      resource.Spec.PasswordFromSecret.Name,
-		}
-
-		resourceSecret := &corev1.Secret{}
-
-		err := r.Client.Get(ctx, secretNamespacedName, resourceSecret)
-		if err != nil {
-			return r.Result(fmt.Errorf("failed to retrieve password from secret: %s", err))
-		}
-
-		rolePassword = string(resourceSecret.Data[resource.Spec.PasswordFromSecret.Key])
-	} else {
-		// If no password is cached, we create a new one
-		if val, ok := r.CacheRolePasswords[resource.Spec.Name]; ok {
-			rolePassword = val
-		} else {
-			rolePassword = r.generatePassword(64)
-		}
+	rolePassword, err := r.retrieveRolePassword(resource)
+	if err != nil {
+		return r.Result(err)
 	}
 
 	desiredRole := postgresql.Role{
@@ -469,4 +448,59 @@ func (r *PostgresRoleReconciler) generatePassword(length int) (password string) 
 	}
 
 	return string(result)
+}
+
+func (r *PostgresRoleReconciler) retrieveRolePassword(resource *managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole) (password string, err error) {
+	// Retrieve password from user-provided Secret
+	if resource.Spec.PasswordFromSecret != nil {
+		secretNamespacedName := types.NamespacedName{
+			Namespace: resource.ObjectMeta.Namespace,
+			Name:      resource.Spec.PasswordFromSecret.Name,
+		}
+
+		resourceSecret := &corev1.Secret{}
+
+		err := r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+		if err != nil {
+			return "", fmt.Errorf("failed to retrieve password from secret `%s`: %s", secretNamespacedName, err)
+		}
+
+		password, ok := resourceSecret.Data[resource.Spec.PasswordFromSecret.Key]
+		if !ok {
+			err = fmt.Errorf("failed to retrieve password from secret `%s`: key `%s` doesn't exist", secretNamespacedName, resource.Spec.PasswordFromSecret.Key)
+		}
+		return string(password), err
+	}
+
+	// Retrieve password from generated Secret
+	if resource.Spec.SecretName != "" {
+		secretNamespacedName := types.NamespacedName{
+			Namespace: resource.ObjectMeta.Namespace,
+			Name:      resource.Spec.SecretName,
+		}
+
+		resourceSecret := &corev1.Secret{}
+
+		err := r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+		if err != nil {
+			if client.IgnoreNotFound(err) != nil {
+				return "", fmt.Errorf("failed to retrieve password from secret `%s`: %s", secretNamespacedName, err)
+			}
+		} else {
+			// Retrieve password from the Secret
+			password, ok := resourceSecret.Data["PGPASSWORD"]
+			if !ok {
+				err = fmt.Errorf("failed to retrieve password from secret `%s`: key `%s` doesn't exist", secretNamespacedName, "PGPASSWORD")
+			}
+			return string(password), err
+		}
+	}
+
+	// Retrieve password from cache
+	if val, ok := r.CacheRolePasswords[resource.Spec.Name]; ok {
+		return val, nil
+	}
+
+	// Generate a new password if an existing one cannot be retrieve
+	return r.generatePassword(64), nil
 }

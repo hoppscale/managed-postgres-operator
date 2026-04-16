@@ -584,6 +584,201 @@ var _ = Describe("PostgresRole Controller", func() {
 				})
 
 				When("the output secret exists", func() {
+					When("password is not in cache", func() {
+						It("should read password from the Secret and not generate a new one", func() {
+							existingOutputSecret := &corev1.Secret{
+								ObjectMeta: metav1.ObjectMeta{
+									Namespace: "default",
+									Name:      "db-config-myrole",
+								},
+								Type: "Opaque",
+								Data: map[string][]byte{
+									"PGPASSWORD": []byte("mypassword"),
+									"PGHOST":     []byte("localhost"),
+									"PGPORT":     []byte("5432"),
+									"PGDATABASE": []byte("mydatabase"),
+								},
+							}
+							Expect(k8sClient.Create(ctx, existingOutputSecret)).To(Succeed())
+
+							resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+							Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+							resource.ObjectMeta.Annotations = map[string]string{
+								utils.OperatorInstanceAnnotationName: "foo",
+							}
+							resource.Spec.SecretName = "db-config-myrole"
+							Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+							pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+								WithArgs("myrole").
+								WillReturnRows(
+									pgxmock.NewRows([]string{
+										"rolname",
+										"rolsuper",
+										"rolinherit",
+										"rolcreaterole",
+										"rolcreatedb",
+										"rolcanlogin",
+										"rolreplication",
+										"rolbypassrls",
+									}).
+										AddRow(
+											"myrole",
+											false,
+											false,
+											true,
+											true,
+											false,
+											false,
+											false,
+										),
+								)
+
+							pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+								WithArgs(""). // Refers to the current pgpool user that we cannot mock
+								WillReturnRows(
+									pgxmock.NewRows([]string{
+										"rolname",
+										"rolsuper",
+										"rolinherit",
+										"rolcreaterole",
+										"rolcreatedb",
+										"rolcanlogin",
+										"rolreplication",
+										"rolbypassrls",
+									}).
+										AddRow(
+											"operator",
+											true,
+											true,
+											true,
+											true,
+											true,
+											true,
+											true,
+										),
+								)
+
+							pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`ALTER ROLE "myrole" WITH PASSWORD 'mypassword'`))).
+								WillReturnResult(pgxmock.NewResult("foo", 1))
+
+							pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+								WithArgs("myrole").
+								WillReturnRows(
+									pgxmock.NewRows([]string{
+										"group_role",
+									}),
+								)
+
+							controllerReconciler := &PostgresRoleReconciler{
+								Client:               k8sClient,
+								Scheme:               k8sClient.Scheme(),
+								PGPools:              pgpools,
+								OperatorInstanceName: "foo",
+								CacheRolePasswords:   make(map[string]string),
+							}
+
+							_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+								NamespacedName: typeNamespacedName,
+							})
+
+							Expect(err).NotTo(HaveOccurred())
+							if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+								Fail(err.Error())
+							}
+						})
+
+						When("the Secret doesn't exist", func() {
+							It("should generate a password and not return an error", func() {
+								resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
+								Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+								resource.ObjectMeta.Annotations = map[string]string{
+									utils.OperatorInstanceAnnotationName: "foo",
+								}
+								resource.Spec.SecretName = "db-config-myrole"
+								Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+								pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+									WithArgs("myrole").
+									WillReturnRows(
+										pgxmock.NewRows([]string{
+											"rolname",
+											"rolsuper",
+											"rolinherit",
+											"rolcreaterole",
+											"rolcreatedb",
+											"rolcanlogin",
+											"rolreplication",
+											"rolbypassrls",
+										}).
+											AddRow(
+												"myrole",
+												false,
+												false,
+												true,
+												true,
+												false,
+												false,
+												false,
+											),
+									)
+
+								pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleSQLStatement))).
+									WithArgs(""). // Refers to the current pgpool user that we cannot mock
+									WillReturnRows(
+										pgxmock.NewRows([]string{
+											"rolname",
+											"rolsuper",
+											"rolinherit",
+											"rolcreaterole",
+											"rolcreatedb",
+											"rolcanlogin",
+											"rolreplication",
+											"rolbypassrls",
+										}).
+											AddRow(
+												"operator",
+												true,
+												true,
+												true,
+												true,
+												true,
+												true,
+												true,
+											),
+									)
+
+								pgpoolsMock["default"].ExpectExec(fmt.Sprintf("^%s '[a-zA-Z0-9]{64}'$", regexp.QuoteMeta(`ALTER ROLE "myrole" WITH PASSWORD`))).
+									WillReturnResult(pgxmock.NewResult("foo", 1))
+
+								pgpoolsMock["default"].ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(postgresql.GetRoleMembershipStatement))).
+									WithArgs("myrole").
+									WillReturnRows(
+										pgxmock.NewRows([]string{
+											"group_role",
+										}),
+									)
+
+								controllerReconciler := &PostgresRoleReconciler{
+									Client:               k8sClient,
+									Scheme:               k8sClient.Scheme(),
+									PGPools:              pgpools,
+									OperatorInstanceName: "foo",
+									CacheRolePasswords:   make(map[string]string),
+								}
+
+								_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+									NamespacedName: typeNamespacedName,
+								})
+
+								Expect(err).NotTo(HaveOccurred())
+								if err := pgpoolsMock["default"].ExpectationsWereMet(); err != nil {
+									Fail(err.Error())
+								}
+							})
+						})
+					})
+
 					When("the output secret's label has been removed and PGUSER is missing", func() {
 						It("should update the output secret to add the 'managed-by' label and add PGUSER field", func() {
 							existingOutputSecret := &corev1.Secret{
