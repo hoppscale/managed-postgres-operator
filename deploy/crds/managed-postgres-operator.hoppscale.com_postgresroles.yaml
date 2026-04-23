@@ -82,6 +82,10 @@ spec:
                 type: object
               replication:
                 type: boolean
+              secretAnnotations:
+                additionalProperties:
+                  type: string
+                type: object
               secretName:
                 type: string
               secretTemplate:
