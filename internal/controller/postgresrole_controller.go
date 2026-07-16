@@ -69,12 +69,12 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 
-	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
 		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
-	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
+	if !utils.IsManagedByOperatorInstance(resource.Annotations, r.OperatorInstanceName) {
 		return r.Result(nil)
 	}
 
@@ -105,7 +105,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.Result(fmt.Errorf("failed to get operator's role: %s", err))
 	}
 
-	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
+	if resource.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresRoleFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresRoleFinalizer)
 			if err := r.Update(ctx, resource); err != nil {
@@ -153,7 +153,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	err = r.reconcileRoleSecret(
-		resource.ObjectMeta.Namespace,
+		resource.Namespace,
 		resource.Spec.SecretName,
 		resource.Spec.SecretTemplate,
 		&desiredRole,
@@ -382,7 +382,7 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 	}
 
 	// Retrieve Secret
-	err = r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+	err = r.Get(context.Background(), secretNamespacedName, resourceSecret)
 	if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to retrieve secret: %s", err)
 	}
@@ -401,7 +401,7 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 			Data: desiredSecretData,
 		}
 
-		err = r.Client.Create(context.Background(), resourceSecret)
+		err = r.Create(context.Background(), resourceSecret)
 		if err != nil {
 			return fmt.Errorf("failed to create secret: %s", err)
 		}
@@ -413,11 +413,11 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 
 	// Update secret if needed
 	toUpdate := false
-	if val, ok := resourceSecret.ObjectMeta.Labels["app.kubernetes.io/managed-by"]; !ok || val != "managed-postgres-operator.hoppscale.com" {
-		if resourceSecret.ObjectMeta.Labels == nil {
-			resourceSecret.ObjectMeta.Labels = make(map[string]string)
+	if val, ok := resourceSecret.Labels["app.kubernetes.io/managed-by"]; !ok || val != "managed-postgres-operator.hoppscale.com" {
+		if resourceSecret.Labels == nil {
+			resourceSecret.Labels = make(map[string]string)
 		}
-		resourceSecret.ObjectMeta.Labels["app.kubernetes.io/managed-by"] = "managed-postgres-operator.hoppscale.com"
+		resourceSecret.Labels["app.kubernetes.io/managed-by"] = "managed-postgres-operator.hoppscale.com"
 		toUpdate = true
 	}
 
@@ -427,7 +427,7 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 	}
 
 	if toUpdate {
-		err = r.Client.Update(context.Background(), resourceSecret)
+		err = r.Update(context.Background(), resourceSecret)
 		if err != nil {
 			return fmt.Errorf("failed to update secret: %s", err)
 		}
@@ -454,13 +454,13 @@ func (r *PostgresRoleReconciler) retrieveRolePassword(resource *managedpostgreso
 	// Retrieve password from user-provided Secret
 	if resource.Spec.PasswordFromSecret != nil {
 		secretNamespacedName := types.NamespacedName{
-			Namespace: resource.ObjectMeta.Namespace,
+			Namespace: resource.Namespace,
 			Name:      resource.Spec.PasswordFromSecret.Name,
 		}
 
 		resourceSecret := &corev1.Secret{}
 
-		err := r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+		err := r.Get(context.Background(), secretNamespacedName, resourceSecret)
 		if err != nil {
 			return "", fmt.Errorf("failed to retrieve password from secret `%s`: %s", secretNamespacedName, err)
 		}
@@ -475,13 +475,13 @@ func (r *PostgresRoleReconciler) retrieveRolePassword(resource *managedpostgreso
 	// Retrieve password from generated Secret
 	if resource.Spec.SecretName != "" {
 		secretNamespacedName := types.NamespacedName{
-			Namespace: resource.ObjectMeta.Namespace,
+			Namespace: resource.Namespace,
 			Name:      resource.Spec.SecretName,
 		}
 
 		resourceSecret := &corev1.Secret{}
 
-		err := r.Client.Get(context.Background(), secretNamespacedName, resourceSecret)
+		err := r.Get(context.Background(), secretNamespacedName, resourceSecret)
 		if err != nil {
 			if client.IgnoreNotFound(err) != nil {
 				return "", fmt.Errorf("failed to retrieve password from secret `%s`: %s", secretNamespacedName, err)

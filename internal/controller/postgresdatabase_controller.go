@@ -45,12 +45,12 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresDatabase{}
 
-	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
 		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
-	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
+	if !utils.IsManagedByOperatorInstance(resource.Annotations, r.OperatorInstanceName) {
 		return r.Result(nil)
 	}
 
@@ -65,7 +65,7 @@ func (r *PostgresDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		Extensions: resource.Spec.Extensions,
 	}
 
-	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
+	if resource.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresDatabaseFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresDatabaseFinalizer)
 			if err := r.Update(ctx, resource); err != nil {

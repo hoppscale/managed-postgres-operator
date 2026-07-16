@@ -112,7 +112,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should continue to reconcile the resource and create the schema", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
@@ -172,7 +172,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should skip reconciliation", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "bar",
 				}
 				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
@@ -201,7 +201,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should change the owner of the schema", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
@@ -266,7 +266,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should grant missing privileges and revoke the others", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				resource.Spec.PrivilegesByRole = map[string]managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchemaPrivilegesSpec{
@@ -340,7 +340,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should successfully reconcile the resource on deletion", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)
@@ -383,7 +383,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should not drop the schema if keepOnDelete is true", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)
@@ -427,7 +427,7 @@ var _ = Describe("PostgresSchema Controller", func() {
 			It("should delete the resource but skip the DROP SCHEMA", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "foo",
 				}
 				controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)

@@ -157,7 +157,7 @@ var _ = Describe("PostgresRole Controller", func() {
 					It("should continue to reconcile the resource and create the role", func() {
 						resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 						Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-						resource.ObjectMeta.Annotations = map[string]string{
+						resource.Annotations = map[string]string{
 							utils.OperatorInstanceAnnotationName: "foo",
 						}
 						Expect(k8sClient.Update(ctx, resource)).To(Succeed())
@@ -328,7 +328,7 @@ var _ = Describe("PostgresRole Controller", func() {
 					It("should retrieve the password from the secret and create the role", func() {
 						resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 						Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-						resource.ObjectMeta.Annotations = map[string]string{
+						resource.Annotations = map[string]string{
 							utils.OperatorInstanceAnnotationName: "foo",
 						}
 						resource.Spec.PasswordFromSecret = &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRolePasswordFromSecret{
@@ -603,7 +603,7 @@ var _ = Describe("PostgresRole Controller", func() {
 
 							resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 							Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-							resource.ObjectMeta.Annotations = map[string]string{
+							resource.Annotations = map[string]string{
 								utils.OperatorInstanceAnnotationName: "foo",
 							}
 							resource.Spec.SecretName = "db-config-myrole"
@@ -692,7 +692,7 @@ var _ = Describe("PostgresRole Controller", func() {
 							It("should generate a password and not return an error", func() {
 								resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 								Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-								resource.ObjectMeta.Annotations = map[string]string{
+								resource.Annotations = map[string]string{
 									utils.OperatorInstanceAnnotationName: "foo",
 								}
 								resource.Spec.SecretName = "db-config-myrole"
@@ -881,7 +881,7 @@ var _ = Describe("PostgresRole Controller", func() {
 			It("should skip reconciliation", func() {
 				resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresRole{}
 				Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
-				resource.ObjectMeta.Annotations = map[string]string{
+				resource.Annotations = map[string]string{
 					utils.OperatorInstanceAnnotationName: "bar",
 				}
 				Expect(k8sClient.Update(ctx, resource)).To(Succeed())

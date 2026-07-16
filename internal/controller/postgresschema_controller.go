@@ -60,12 +60,12 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	resource := &managedpostgresoperatorhoppscalecomv1alpha1.PostgresSchema{}
 
-	if err := r.Client.Get(ctx, req.NamespacedName, resource); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
 		return r.Result(client.IgnoreNotFound(err))
 	}
 
 	// Skip reconcile if the resource is not managed by this operator
-	if !utils.IsManagedByOperatorInstance(resource.ObjectMeta.Annotations, r.OperatorInstanceName) {
+	if !utils.IsManagedByOperatorInstance(resource.Annotations, r.OperatorInstanceName) {
 		return r.Result(nil)
 	}
 
@@ -90,7 +90,7 @@ func (r *PostgresSchemaReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Owner:    resource.Spec.Owner,
 	}
 
-	if resource.ObjectMeta.DeletionTimestamp.IsZero() {
+	if resource.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(resource, PostgresSchemaFinalizer) {
 			controllerutil.AddFinalizer(resource, PostgresSchemaFinalizer)
 			if err := r.Update(ctx, resource); err != nil {
