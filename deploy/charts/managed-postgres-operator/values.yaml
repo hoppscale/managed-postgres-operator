@@ -47,6 +47,8 @@ tolerations: []
 
 affinity: {}
 
+topologySpreadConstraints: []
+
 prometheus:
   enabled: false
   podMonitor:
