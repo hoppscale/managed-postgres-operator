@@ -25,6 +25,8 @@ linters:
     revive:
       rules:
         - name: comment-spacings
+    goconst:
+      ignore-tests: true
   exclusions:
     generated: lax
     rules:
