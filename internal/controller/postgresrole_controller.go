@@ -45,7 +45,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const PostgresRoleFinalizer = "postgresrole.managed-postgres-operator.hoppscale.com/finalizer"
+const (
+	PostgresRoleFinalizer = "postgresrole.managed-postgres-operator.hoppscale.com/finalizer"
+
+	K8SLabelManagedByName  = "app.kubernetes.io/managed-by"
+	K8SLabelManagedByValue = "managed-postgres-operator.hoppscale.com"
+)
 
 // PostgresRoleReconciler reconciles a PostgresRole object
 type PostgresRoleReconciler struct {
@@ -365,11 +370,11 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 	}
 
 	desiredSecretData := map[string][]byte{
-		"PGUSER":     []byte(secretDataTemplateVars.Role),
-		"PGPASSWORD": []byte(secretDataTemplateVars.Password),
-		"PGHOST":     []byte(secretDataTemplateVars.Host),
-		"PGPORT":     []byte(secretDataTemplateVars.Port),
-		"PGDATABASE": []byte(secretDataTemplateVars.Database),
+		postgresql.PGUSER:     []byte(secretDataTemplateVars.Role),
+		postgresql.PGPASSWORD: []byte(secretDataTemplateVars.Password),
+		postgresql.PGHOST:     []byte(secretDataTemplateVars.Host),
+		postgresql.PGPORT:     []byte(secretDataTemplateVars.Port),
+		postgresql.PGDATABASE: []byte(secretDataTemplateVars.Database),
 	}
 
 	for secretKey, secretValue := range secretTemplate {
@@ -394,7 +399,7 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 				Namespace: secretNamespace,
 				Name:      secretName,
 				Labels: map[string]string{
-					"app.kubernetes.io/managed-by": "managed-postgres-operator.hoppscale.com",
+					K8SLabelManagedByName: K8SLabelManagedByValue,
 				},
 			},
 			Type: "Opaque",
@@ -413,11 +418,11 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 
 	// Update secret if needed
 	toUpdate := false
-	if val, ok := resourceSecret.Labels["app.kubernetes.io/managed-by"]; !ok || val != "managed-postgres-operator.hoppscale.com" {
+	if val, ok := resourceSecret.Labels[K8SLabelManagedByName]; !ok || val != K8SLabelManagedByValue {
 		if resourceSecret.Labels == nil {
 			resourceSecret.Labels = make(map[string]string)
 		}
-		resourceSecret.Labels["app.kubernetes.io/managed-by"] = "managed-postgres-operator.hoppscale.com"
+		resourceSecret.Labels[K8SLabelManagedByName] = K8SLabelManagedByValue
 		toUpdate = true
 	}
 
@@ -488,9 +493,9 @@ func (r *PostgresRoleReconciler) retrieveRolePassword(resource *managedpostgreso
 			}
 		} else {
 			// Retrieve password from the Secret
-			password, ok := resourceSecret.Data["PGPASSWORD"]
+			password, ok := resourceSecret.Data[postgresql.PGPASSWORD]
 			if !ok {
-				err = fmt.Errorf("failed to retrieve password from secret `%s`: key `%s` doesn't exist", secretNamespacedName, "PGPASSWORD")
+				err = fmt.Errorf("failed to retrieve password from secret `%s`: key `%s` doesn't exist", secretNamespacedName, postgresql.PGPASSWORD)
 			}
 			return string(password), err
 		}
