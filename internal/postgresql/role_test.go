@@ -206,7 +206,7 @@ var _ = Describe("PostgreSQL Role", func() {
 
 	Context("Calling CreateRole", func() {
 		It("should create a role with the defined options and return no error", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH SUPERUSER CREATEROLE BYPASSRLS PASSWORD 'password' ADMIN "operator"`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH SUPERUSER CREATEROLE BYPASSRLS PASSWORD 'password' ROLE "operator"`))).
 				WillReturnResult(pgxmock.NewResult("foo", 1))
 
 			role := Role{
@@ -238,7 +238,7 @@ var _ = Describe("PostgreSQL Role", func() {
 		})
 
 		It("should return an error if the PostgreSQL request failed", func() {
-			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH INHERIT CREATEDB LOGIN REPLICATION ADMIN "operator"`))).
+			pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH INHERIT CREATEDB LOGIN REPLICATION ROLE "operator"`))).
 				WillReturnError(fmt.Errorf("fake error from PostgreSQL"))
 
 			role := Role{
@@ -293,6 +293,44 @@ var _ = Describe("PostgreSQL Role", func() {
 				err := CreateRole(pgpool, &operatorRole, &role)
 
 				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		When("PostgreSQL version is older than 16", func() {
+			It("should add ADMIN option", func() {
+				pgpoolMock.ExpectQuery(fmt.Sprintf("^%s$", regexp.QuoteMeta(`SHOW createrole_self_grant`))).
+					WillReturnError(fmt.Errorf("Error: unrecognized configuration parameter"))
+
+				pgpoolMock.ExpectExec(fmt.Sprintf("^%s$", regexp.QuoteMeta(`CREATE ROLE "foo" WITH CREATEROLE BYPASSRLS PASSWORD 'password' ADMIN "operator" ROLE "operator"`))).
+					WillReturnResult(pgxmock.NewResult("foo", 1))
+
+				role := Role{
+					Name:       "foo",
+					SuperUser:  false,
+					Inherit:    false,
+					CreateRole: true,
+					BypassRLS:  true,
+					Password:   "password",
+				}
+
+				operatorRole := Role{
+					Name:        "operator",
+					SuperUser:   true,
+					Inherit:     true,
+					CreateRole:  true,
+					CreateDB:    true,
+					Login:       true,
+					Replication: true,
+					BypassRLS:   true,
+				}
+
+				err := CreateRole(pgpool, &operatorRole, &role)
+
+				Expect(err).NotTo(HaveOccurred())
+				if err := pgpoolMock.ExpectationsWereMet(); err != nil {
+					Fail(err.Error())
+				}
+
 			})
 		})
 	})

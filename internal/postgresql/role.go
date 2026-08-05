@@ -58,7 +58,14 @@ func CreateRole(pgpool PGPoolInterface, operatorRole, role *Role) (err error) {
 		return err
 	}
 
-	options += fmt.Sprintf("ADMIN %s", pgx.Identifier{operatorRole.Name}.Sanitize())
+	// To support PostgreSQL versions older than 16, we must ensure the role is created with
+	// the ADMIN option.
+	_, err = pgpool.Query(context.Background(), "SHOW createrole_self_grant")
+	if err != nil && strings.Contains(err.Error(), "unrecognized configuration parameter") {
+		options += fmt.Sprintf("ADMIN %s ", pgx.Identifier{operatorRole.Name}.Sanitize())
+	}
+
+	options += fmt.Sprintf("ROLE %s", pgx.Identifier{operatorRole.Name}.Sanitize())
 
 	_, err = pgpool.Exec(context.Background(), fmt.Sprintf("CREATE ROLE %s %s", sanitizedName, options))
 	if err != nil {
