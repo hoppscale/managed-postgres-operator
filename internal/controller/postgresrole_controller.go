@@ -161,6 +161,7 @@ func (r *PostgresRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		resource.Namespace,
 		resource.Spec.SecretName,
 		resource.Spec.SecretTemplate,
+		resource.Spec.SecretAnnotations,
 		&desiredRole,
 		r.PGPools.Default.Config().ConnConfig,
 	)
@@ -342,7 +343,7 @@ func (r *PostgresRoleReconciler) reconcileRoleMembership(role string, desiredMem
 	return err
 }
 
-func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName string, secretTemplate map[string]string, role *postgresql.Role, pgConfig *pgx.ConnConfig) (err error) {
+func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName string, secretTemplate map[string]string, secretAnnotations map[string]string, role *postgresql.Role, pgConfig *pgx.ConnConfig) (err error) {
 	// Do not create Secret if no name provided by the user
 	if secretName == "" {
 		return err
@@ -396,8 +397,9 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 	if errors.IsNotFound(err) {
 		resourceSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: secretNamespace,
-				Name:      secretName,
+				Namespace:   secretNamespace,
+				Name:        secretName,
+				Annotations: secretAnnotations,
 				Labels: map[string]string{
 					K8SLabelManagedByName: K8SLabelManagedByValue,
 				},
@@ -424,6 +426,16 @@ func (r *PostgresRoleReconciler) reconcileRoleSecret(secretNamespace, secretName
 		}
 		resourceSecret.Labels[K8SLabelManagedByName] = K8SLabelManagedByValue
 		toUpdate = true
+	}
+
+	if resourceSecret.ObjectMeta.Annotations == nil {
+		resourceSecret.ObjectMeta.Annotations = make(map[string]string)
+	}
+	for k, v := range secretAnnotations {
+		if val, ok := resourceSecret.ObjectMeta.Annotations[k]; !ok || val != v {
+			resourceSecret.ObjectMeta.Annotations[k] = v
+			toUpdate = true
+		}
 	}
 
 	if fmt.Sprint(resourceSecret.Data) != fmt.Sprint(desiredSecretData) {

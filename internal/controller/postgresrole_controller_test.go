@@ -252,6 +252,7 @@ var _ = Describe("PostgresRole Controller", func() {
 							"default",
 							"db-config-myrole",
 							make(map[string]string),
+							make(map[string]string),
 							&role,
 							pgConfig,
 						)
@@ -299,6 +300,7 @@ var _ = Describe("PostgresRole Controller", func() {
 							"default",
 							"db-config-myrole",
 							secretTemplate,
+							make(map[string]string),
 							&role,
 							pgConfig,
 						)
@@ -815,6 +817,7 @@ var _ = Describe("PostgresRole Controller", func() {
 							err = controllerReconciler.reconcileRoleSecret(
 								"default",
 								"db-config-myrole",
+								make(map[string]string),
 								make(map[string]string),
 								&role,
 								pgConfig,

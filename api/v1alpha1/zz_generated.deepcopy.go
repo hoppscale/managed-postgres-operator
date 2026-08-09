@@ -244,6 +244,13 @@ func (in *PostgresRoleSpec) DeepCopyInto(out *PostgresRoleSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.SecretAnnotations != nil {
+		in, out := &in.SecretAnnotations, &out.SecretAnnotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.MemberOfRoles != nil {
 		in, out := &in.MemberOfRoles, &out.MemberOfRoles
 		*out = make([]string, len(*in))
