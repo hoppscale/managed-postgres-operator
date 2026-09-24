@@ -53,6 +53,7 @@ type PostgresRoleSpec struct {
 	PasswordFromSecret *PostgresRolePasswordFromSecret `json:"passwordFromSecret,omitempty"`
 	SecretName         string                          `json:"secretName,omitempty"`
 	SecretTemplate     map[string]string               `json:"secretTemplate,omitempty"`
+	SecretAnnotations  map[string]string               `json:"secretAnnotations,omitempty"`
 
 	MemberOfRoles []string `json:"memberOfRoles,omitempty"`
 
